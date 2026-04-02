@@ -1,4 +1,5 @@
 use tauri::Manager;
+use tauri::Emitter;
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 
@@ -74,7 +75,6 @@ async fn export_favorites(
     app: tauri::AppHandle,
     favorites: Vec<FavoriteWord>,
 ) -> Result<FileOperationResult, String> {
-    // 使用对话框插件选择保存路径
     let file_path = app.dialog().file().blocking_save_file();
     
     match file_path {
@@ -105,7 +105,6 @@ async fn export_favorites(
 // 导入收藏
 #[tauri::command]
 async fn import_favorites(app: tauri::AppHandle) -> Result<ImportFavoritesResult, String> {
-    // 使用对话框插件选择文件
     let file_path = app.dialog().file().blocking_pick_file();
     
     match file_path {
@@ -200,20 +199,17 @@ async fn import_settings(app: tauri::AppHandle) -> Result<ImportSettingsResult, 
     }
 }
 
-/// 打开开发者工具（生产环境也可用）
+/// 打开开发者工具
 #[tauri::command]
 async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
-    println!("[open_devtools] 收到打开 DevTools 请求");
     if let Some(window) = app.get_webview_window("main") {
-        println!("[open_devtools] 找到主窗口，正在打开 DevTools");
         window.open_devtools();
-        println!("[open_devtools] DevTools 已打开");
         Ok(())
     } else {
-        println!("[open_devtools] 错误：主窗口未找到");
         Err("窗口未找到".to_string())
     }
 }
+
 #[tauri::command]
 fn get_platform() -> &'static str {
     #[cfg(desktop)]
@@ -226,12 +222,43 @@ fn get_platform() -> &'static str {
     }
 }
 
-/// 处理单例模式：当第二个实例启动时，聚焦到已存在的窗口（仅桌面端）
+/// 显示窗口
+#[tauri::command]
+async fn show_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        Ok(())
+    } else {
+        Err("窗口未找到".to_string())
+    }
+}
+
+/// 隐藏窗口
+#[tauri::command]
+async fn hide_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+        Ok(())
+    } else {
+        Err("窗口未找到".to_string())
+    }
+}
+
+/// 退出应用程序
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+/// 处理单例模式：当第二个实例启动时，聚焦到已存在的窗口
 #[cfg(desktop)]
 fn handle_single_instance(app: &tauri::AppHandle, _args: Vec<String>, _cwd: String) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
+        // 发送事件到前端，通知是重复启动
+        let _ = window.emit("single-instance", ());
     }
 }
 
@@ -256,18 +283,73 @@ pub fn run() {
             import_settings,
             get_platform,
             open_devtools,
+            show_window,
+            hide_window,
+            quit_app,
         ])
         .setup(|app| {
             #[cfg(desktop)]
             {
-                use tauri::tray::TrayIconBuilder;
-                let _tray = TrayIconBuilder::new()
+                use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+                use tauri::menu::{Menu, MenuItem};
+                
+                // 创建托盘菜单
+                let show_i = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+                let quit_i = MenuItem::with_id(app, "quit", "退出程序", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
+                
+                // 创建托盘图标
+                let tray = TrayIconBuilder::new()
                     .icon(app.default_window_icon().unwrap().clone())
                     .tooltip("AI Dictionary")
+                    .menu(&menu)
+                    .on_menu_event(|app, event| {
+                        match event.id.as_ref() {
+                            "show" => {
+                                if let Some(window) = app.get_webview_window("main") {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
+                            }
+                            "quit" => {
+                                app.exit(0);
+                            }
+                            _ => {}
+                        }
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        match event {
+                            TrayIconEvent::Click { .. } => {
+                                // 左键单击切换显示/隐藏
+                                if let Some(window) = tray.app_handle().get_webview_window("main") {
+                                    if window.is_visible().unwrap_or(true) {
+                                        let _ = window.hide();
+                                    } else {
+                                        let _ = window.show();
+                                        let _ = window.set_focus();
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    })
                     .build(app)?;
+                    
+                // 存储 tray 引用以防被释放
+                app.manage(tray);
             }
-
+            
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    // 阻止默认关闭行为，改为隐藏窗口
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                _ => {}
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
