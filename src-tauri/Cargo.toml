@@ -1,12 +1,12 @@
 [package]
-name = "tauri2template"
+name = "dict"
 version = "0.1.0"
-description = "A Tauri App"
+description = "AI Dictionary App"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "tauri2template_lib"
+name = "dict_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -19,6 +19,8 @@ tauri-plugin-fs = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time", "rt", "macros"] }
+reqwest = { version = "0.12", features = ["json"] }

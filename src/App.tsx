@@ -1,60 +1,131 @@
-import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useEffect, Suspense, lazy } from 'react'
+import { TitleBar } from '@/components/TitleBar'
+import { SearchBox } from '@/components/SearchBox'
+import { QueryResultView } from '@/components/QueryResult'
+import { BottomNav } from '@/components/BottomNav'
+import { Toast } from '@/components/Toast'
+import { NetworkStatus } from '@/components/NetworkStatus'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useFavoritesStore } from '@/stores/favoritesStore'
+import { useHistoryStore } from '@/stores/historyStore'
+import { usePageTransition } from '@/hooks/usePageTransition'
+import { hideWindow } from '@/utils/tauri'
+import './index.css'
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+// 懒加载页面组件
+const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })))
+const Favorites = lazy(() => import('@/pages/Favorites').then(m => ({ default: m.Favorites })))
+const History = lazy(() => import('@/pages/History').then(m => ({ default: m.History })))
+const Review = lazy(() => import('@/pages/Review').then(m => ({ default: m.Review })))
+const GrammarCheck = lazy(() => import('@/pages/GrammarCheck').then(m => ({ default: m.GrammarCheck })))
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+// 页面加载占位符
+function PageLoader() {
+  return (
+    <div className="page-loader">
+      <div className="loading-spinner" />
+      <p className="loading-text">加载中...</p>
+    </div>
+  )
+}
+
+function SearchPage() {
+  return (
+    <div className="search-page">
+      <SearchBox />
+      <div className="result-container">
+        <QueryResultView />
+      </div>
+    </div>
+  )
+}
+
+function AppContent() {
+  const { displayPage, animationClass } = usePageTransition()
+  const { loadSettings } = useSettingsStore()
+  const { loadFavorites } = useFavoritesStore()
+  const { loadHistory } = useHistoryStore()
+
+  // 应用启动时加载设置、收藏和历史
+  useEffect(() => {
+    loadSettings()
+    loadFavorites()
+    loadHistory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Esc 键隐藏窗口
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        hideWindow()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // 根据当前页面渲染不同内容
+  const renderPage = () => {
+    switch (displayPage) {
+      case 'search':
+        return <SearchPage />
+      case 'grammar':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <GrammarCheck />
+          </Suspense>
+        )
+      case 'favorites':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Favorites />
+          </Suspense>
+        )
+      case 'review':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Review />
+          </Suspense>
+        )
+      case 'history':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <History />
+          </Suspense>
+        )
+      case 'settings':
+        return (
+          <Suspense fallback={<PageLoader />}>
+            <Settings />
+          </Suspense>
+        )
+      default:
+        return <SearchPage />
+    }
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900 p-8">
-      <h1 className="text-3xl font-bold mb-8 text-gray-800 dark:text-white">
-        Welcome to Tauri2 Template
-      </h1>
-
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 w-full max-w-md">
-        <div className="flex gap-2">
-          <input
-            className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
-                       bg-white dark:bg-gray-700 text-gray-900 dark:text-white
-                       focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onChange={(e) => setName(e.currentTarget.value)}
-            placeholder="Enter a name..."
-          />
-          <button
-            type="button"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md 
-                       transition-colors duration-200 font-medium"
-            onClick={() => greet()}
-          >
-            Greet
-          </button>
-        </div>
-
-        {greetMsg && (
-          <p className="mt-4 text-center text-gray-700 dark:text-gray-300">{greetMsg}</p>
-        )}
-      </div>
-
-      <div className="mt-8 text-sm text-gray-500 dark:text-gray-400 text-center">
-        <p>Built with Tauri 2 + React + Vite + Tailwind CSS</p>
-        <p className="mt-2">
-          <a
-            href="https://tauri.app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 hover:underline"
-          >
-            Learn more about Tauri
-          </a>
-        </p>
-      </div>
+    <div className="app">
+      <TitleBar />
+      <main className={`main-content ${animationClass}`}>
+        {renderPage()}
+      </main>
+      <BottomNav />
     </div>
-  );
+  )
 }
 
-export default App;
+function App() {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+      <Toast />
+      <NetworkStatus />
+    </ErrorBoundary>
+  )
+}
+
+export default App

@@ -1,9 +1,203 @@
 use tauri::Manager;
+use serde::{Deserialize, Serialize};
+use tauri_plugin_dialog::DialogExt;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+// 设置类型
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Settings {
+    api_base_url: String,
+    api_key: String,
+    model: String,
+    temperature: f32,
+    history_limit: i32,
+}
+
+// 收藏类型
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FavoriteWord {
+    id: String,
+    word: String,
+    translation: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    phonetic: Option<String>,
+    created_at: i64,
+    query_data: serde_json::Value,
+    review_count: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_reviewed_at: Option<i64>,
+    mastery_level: i32,
+}
+
+// 文件操作结果
+#[derive(Debug, Clone, Serialize)]
+struct FileOperationResult {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cancelled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+// 导入收藏结果
+#[derive(Debug, Clone, Serialize)]
+struct ImportFavoritesResult {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cancelled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    favorites: Option<Vec<FavoriteWord>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    valid_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+// 导入设置结果
+#[derive(Debug, Clone, Serialize)]
+struct ImportSettingsResult {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cancelled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    settings: Option<Settings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+// 导出收藏
 #[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
+async fn export_favorites(
+    app: tauri::AppHandle,
+    favorites: Vec<FavoriteWord>,
+) -> Result<FileOperationResult, String> {
+    // 使用对话框插件选择保存路径
+    let file_path = app.dialog().file().blocking_save_file();
+    
+    match file_path {
+        Some(path) => {
+            let path_str: String = path.to_string();
+            let data = serde_json::to_string_pretty(&favorites)
+                .map_err(|e| format!("序列化失败: {}", e))?;
+            
+            std::fs::write(&path_str, data)
+                .map_err(|e| format!("写入文件失败: {}", e))?;
+            
+            Ok(FileOperationResult {
+                success: true,
+                cancelled: Some(false),
+                file_path: Some(path_str),
+                error: None,
+            })
+        }
+        None => Ok(FileOperationResult {
+            success: false,
+            cancelled: Some(true),
+            file_path: None,
+            error: None,
+        }),
+    }
+}
+
+// 导入收藏
+#[tauri::command]
+async fn import_favorites(app: tauri::AppHandle) -> Result<ImportFavoritesResult, String> {
+    // 使用对话框插件选择文件
+    let file_path = app.dialog().file().blocking_pick_file();
+    
+    match file_path {
+        Some(path) => {
+            let path_str: String = path.to_string();
+            let data = std::fs::read_to_string(&path_str)
+                .map_err(|e| format!("读取文件失败: {}", e))?;
+            
+            let favorites: Vec<FavoriteWord> = serde_json::from_str(&data)
+                .map_err(|e| format!("解析 JSON 失败: {}", e))?;
+            
+            Ok(ImportFavoritesResult {
+                success: true,
+                cancelled: Some(false),
+                favorites: Some(favorites.clone()),
+                total_count: Some(favorites.len()),
+                valid_count: Some(favorites.len()),
+                error: None,
+            })
+        }
+        None => Ok(ImportFavoritesResult {
+            success: false,
+            cancelled: Some(true),
+            favorites: None,
+            total_count: None,
+            valid_count: None,
+            error: None,
+        }),
+    }
+}
+
+// 导出设置
+#[tauri::command]
+async fn export_settings(
+    app: tauri::AppHandle,
+    settings: Settings,
+) -> Result<FileOperationResult, String> {
+    let file_path = app.dialog().file().blocking_save_file();
+    
+    match file_path {
+        Some(path) => {
+            let path_str: String = path.to_string();
+            let data = serde_json::to_string_pretty(&settings)
+                .map_err(|e| format!("序列化失败: {}", e))?;
+            
+            std::fs::write(&path_str, data)
+                .map_err(|e| format!("写入文件失败: {}", e))?;
+            
+            Ok(FileOperationResult {
+                success: true,
+                cancelled: Some(false),
+                file_path: Some(path_str),
+                error: None,
+            })
+        }
+        None => Ok(FileOperationResult {
+            success: false,
+            cancelled: Some(true),
+            file_path: None,
+            error: None,
+        }),
+    }
+}
+
+// 导入设置
+#[tauri::command]
+async fn import_settings(app: tauri::AppHandle) -> Result<ImportSettingsResult, String> {
+    let file_path = app.dialog().file().blocking_pick_file();
+    
+    match file_path {
+        Some(path) => {
+            let path_str: String = path.to_string();
+            let data = std::fs::read_to_string(&path_str)
+                .map_err(|e| format!("读取文件失败: {}", e))?;
+            
+            let settings: Settings = serde_json::from_str(&data)
+                .map_err(|e| format!("解析 JSON 失败: {}", e))?;
+            
+            Ok(ImportSettingsResult {
+                success: true,
+                cancelled: Some(false),
+                settings: Some(settings),
+                error: None,
+            })
+        }
+        None => Ok(ImportSettingsResult {
+            success: false,
+            cancelled: Some(true),
+            settings: None,
+            error: None,
+        }),
+    }
 }
 
 /// 获取当前平台类型
@@ -33,7 +227,8 @@ pub fn run() {
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_notification::init());
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_store::Builder::default().build());
 
     // 只在桌面端启用全局快捷键插件
     #[cfg(desktop)]
@@ -48,17 +243,20 @@ pub fn run() {
     }
 
     builder
-        .invoke_handler(tauri::generate_handler![greet, get_platform,])
+        .invoke_handler(tauri::generate_handler![
+            export_favorites,
+            import_favorites,
+            export_settings,
+            import_settings,
+            get_platform,
+        ])
         .setup(|app| {
-            // 在这里可以添加应用初始化逻辑
-            // 例如：创建系统托盘菜单、初始化数据库等
-
             #[cfg(desktop)]
             {
                 use tauri::tray::TrayIconBuilder;
                 let _tray = TrayIconBuilder::new()
                     .icon(app.default_window_icon().unwrap().clone())
-                    .tooltip("Tauri2 Template")
+                    .tooltip("AI Dictionary")
                     .build(app)?;
             }
 
