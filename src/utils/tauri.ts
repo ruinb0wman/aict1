@@ -1,38 +1,8 @@
 // Tauri API 封装工具
 
 import { invoke } from '@tauri-apps/api/core'
-import { Store } from '@tauri-apps/plugin-store'
 import type { Settings, FavoriteWord } from '@/types'
 import type { FileOperationResult, ImportFavoritesResult, ImportSettingsResult } from '@/types/tauri'
-
-// 初始化 Store
-let store: Store | null = null
-
-async function getStore(): Promise<Store> {
-  if (!store) {
-    store = await Store.load('settings.json')
-  }
-  return store
-}
-
-// 设置相关
-export async function getSettings(): Promise<Settings> {
-  const store = await getStore()
-  const settings = await store.get<Settings>('settings')
-  return settings || {
-    apiBaseUrl: 'https://api.openai.com/v1',
-    apiKey: '',
-    model: 'gpt-3.5-turbo',
-    temperature: 0.7,
-    historyLimit: 100,
-  }
-}
-
-export async function setSettings(settings: Settings): Promise<void> {
-  const store = await getStore()
-  await store.set('settings', settings)
-  await store.save()
-}
 
 // 设置导入导出
 export async function exportSettings(settings: Settings): Promise<FileOperationResult> {

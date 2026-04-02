@@ -1,14 +1,16 @@
 import Dexie, { type EntityTable } from 'dexie'
-import { WordEntry, QueryResult, FavoriteWord } from '@/types'
+import { WordEntry, QueryResult, FavoriteWord, HistoryItem, Settings } from '@/types'
 
 // 定义 Dexie 数据库
 interface DictDB extends Dexie {
   words: EntityTable<WordEntry, 'id'>
   favorites: EntityTable<FavoriteWord, 'id'>
+  history: EntityTable<HistoryItem, 'id'>
+  settings: EntityTable<{ key: string; value: Settings }, 'key'>
 }
 
 const DB_NAME = 'DictDB'
-const DB_VERSION = 2  // 升级数据库版本以添加 favorites 表
+const DB_VERSION = 3  // 升级数据库版本以添加 history 和 settings 表
 
 export class IndexedDBService {
   private db: DictDB
@@ -19,7 +21,9 @@ export class IndexedDBService {
     // 定义数据库结构
     this.db.version(DB_VERSION).stores({
       words: 'id, word, updatedAt',
-      favorites: 'id, word, createdAt'
+      favorites: 'id, word, createdAt',
+      history: 'id, word, timestamp',
+      settings: 'key'
     })
   }
 
@@ -151,6 +155,54 @@ export class IndexedDBService {
   async isFavorite(word: string): Promise<boolean> {
     const count = await this.db.favorites.where({ word: word.toLowerCase() }).count()
     return count > 0
+  }
+
+  // ==================== 历史记录相关方法 ====================
+
+  // 获取所有历史记录（按时间倒序）
+  async getAllHistory(): Promise<HistoryItem[]> {
+    return this.db.history.orderBy('timestamp').reverse().toArray()
+  }
+
+  // 添加历史记录
+  async addHistory(item: HistoryItem): Promise<void> {
+    await this.db.history.put(item)
+  }
+
+  // 保存所有历史记录（清空后重新保存）
+  async saveHistory(history: HistoryItem[]): Promise<void> {
+    await this.db.history.clear()
+    if (history.length > 0) {
+      await this.db.history.bulkPut(history)
+    }
+  }
+
+  // 删除单条历史记录
+  async removeHistory(id: string): Promise<void> {
+    await this.db.history.delete(id)
+  }
+
+  // 清空历史记录
+  async clearHistory(): Promise<void> {
+    await this.db.history.clear()
+  }
+
+  // 根据单词查找历史记录
+  async getHistoryByWord(word: string): Promise<HistoryItem | undefined> {
+    return this.db.history.get({ word: word.toLowerCase() })
+  }
+
+  // ==================== 设置相关方法 ====================
+
+  // 获取设置
+  async getSettings(): Promise<Settings | null> {
+    const result = await this.db.settings.get('app_settings')
+    return result?.value || null
+  }
+
+  // 保存设置
+  async saveSettings(settings: Settings): Promise<void> {
+    await this.db.settings.put({ key: 'app_settings', value: settings })
   }
 }
 

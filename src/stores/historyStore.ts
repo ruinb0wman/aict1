@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { HistoryItem, QueryResponse } from '@/types'
+import { indexedDBService } from '@/utils/indexedDB'
 import { useAppStore } from '@/stores/appStore'
 
 interface HistoryState {
@@ -35,7 +36,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   loadHistory: async () => {
     set({ isLoading: true })
     try {
-      const data = await window.electronData.history.load()
+      const data = await indexedDBService.getAllHistory()
       set({ history: data, isLoading: false })
     } catch (error) {
       console.error('Failed to load history:', error)
@@ -49,7 +50,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   // 保存历史
   saveHistory: async (history) => {
     try {
-      await window.electronData.history.save(history)
+      await indexedDBService.saveHistory(history)
       set({ history })
     } catch (error) {
       console.error('Failed to save history:', error)

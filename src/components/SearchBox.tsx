@@ -91,26 +91,8 @@ export function SearchBox() {
     useWordsStore.getState().init()
   }, [])
 
-  // 监听剪切板内容变化
-  useEffect(() => {
-    // 检查是否在 Electron 环境中
-    if (!window.electronClipboard) return
-
-    // 注册剪切板监听
-    const unsubscribe = window.electronClipboard.onClipboardContent((text) => {
-      // 防重复查询：如果与上次查询相同则不处理
-      if (text === lastQuery) return
-      
-      // 自动填充输入框
-      setInput(text)
-      // 自动触发查询
-      performSearch(text)
-    })
-
-    return () => {
-      unsubscribe()
-    }
-  }, [lastQuery, performSearch])
+  // 注意：剪切板监听功能需要 Tauri clipboard 插件，暂时禁用
+  // 如需启用，请安装 @tauri-apps/plugin-clipboard-manager
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {

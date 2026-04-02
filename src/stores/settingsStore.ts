@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { Settings, defaultSettings } from '@/types'
 import { useAppStore } from '@/stores/appStore'
-import { getSettings, setSettings, exportSettings, importSettings } from '@/utils/tauri'
+import { indexedDBService } from '@/utils/indexedDB'
+import { exportSettings, importSettings } from '@/utils/tauri'
 
 interface SettingsState extends Settings {
   isLoading: boolean
@@ -21,15 +22,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadSettings: async () => {
     set({ isLoading: true })
     try {
-      const savedSettings = await getSettings()
-      set({
-        apiBaseUrl: savedSettings.apiBaseUrl || defaultSettings.apiBaseUrl,
-        apiKey: savedSettings.apiKey || defaultSettings.apiKey,
-        model: savedSettings.model || defaultSettings.model,
-        temperature: savedSettings.temperature ?? defaultSettings.temperature,
-        historyLimit: savedSettings.historyLimit || defaultSettings.historyLimit,
-        isLoading: false,
-      })
+      const savedSettings = await indexedDBService.getSettings()
+      if (savedSettings) {
+        set({
+          apiBaseUrl: savedSettings.apiBaseUrl || defaultSettings.apiBaseUrl,
+          apiKey: savedSettings.apiKey || defaultSettings.apiKey,
+          model: savedSettings.model || defaultSettings.model,
+          temperature: savedSettings.temperature ?? defaultSettings.temperature,
+          historyLimit: savedSettings.historyLimit || defaultSettings.historyLimit,
+          isLoading: false,
+        })
+      } else {
+        set({ isLoading: false })
+      }
     } catch (error) {
       console.error('Failed to load settings:', error)
       set({ isLoading: false })
@@ -44,14 +49,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ isLoading: true })
     try {
       const current = get()
-      const merged = {
+      const merged: Settings = {
         apiBaseUrl: newSettings.apiBaseUrl ?? current.apiBaseUrl,
         apiKey: newSettings.apiKey ?? current.apiKey,
         model: newSettings.model ?? current.model,
         temperature: newSettings.temperature ?? current.temperature,
         historyLimit: newSettings.historyLimit ?? current.historyLimit,
       }
-      await setSettings(merged)
+      await indexedDBService.saveSettings(merged)
       set({ ...merged, isLoading: false })
       setTimeout(() => {
         useAppStore.getState().showToast('设置已保存', 'success')
