@@ -5,6 +5,7 @@ use tauri_plugin_dialog::DialogExt;
 
 // 设置类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct Settings {
     api_base_url: String,
     api_key: String,
@@ -15,6 +16,7 @@ struct Settings {
 
 // 收藏类型
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct FavoriteWord {
     id: String,
     word: String,
@@ -80,18 +82,32 @@ async fn export_favorites(
     match file_path {
         Some(path) => {
             let path_str: String = path.to_string();
-            let data = serde_json::to_string_pretty(&favorites)
-                .map_err(|e| format!("序列化失败: {}", e))?;
+            let data = match serde_json::to_string_pretty(&favorites) {
+                Ok(d) => d,
+                Err(e) => {
+                    return Ok(FileOperationResult {
+                        success: false,
+                        cancelled: Some(false),
+                        file_path: None,
+                        error: Some(format!("序列化失败: {}", e)),
+                    });
+                }
+            };
             
-            std::fs::write(&path_str, data)
-                .map_err(|e| format!("写入文件失败: {}", e))?;
-            
-            Ok(FileOperationResult {
-                success: true,
-                cancelled: Some(false),
-                file_path: Some(path_str),
-                error: None,
-            })
+            match std::fs::write(&path_str, data) {
+                Ok(_) => Ok(FileOperationResult {
+                    success: true,
+                    cancelled: Some(false),
+                    file_path: Some(path_str),
+                    error: None,
+                }),
+                Err(e) => Ok(FileOperationResult {
+                    success: false,
+                    cancelled: Some(false),
+                    file_path: None,
+                    error: Some(format!("写入文件失败: {}", e)),
+                }),
+            }
         }
         None => Ok(FileOperationResult {
             success: false,
@@ -147,18 +163,32 @@ async fn export_settings(
     match file_path {
         Some(path) => {
             let path_str: String = path.to_string();
-            let data = serde_json::to_string_pretty(&settings)
-                .map_err(|e| format!("序列化失败: {}", e))?;
+            let data = match serde_json::to_string_pretty(&settings) {
+                Ok(d) => d,
+                Err(e) => {
+                    return Ok(FileOperationResult {
+                        success: false,
+                        cancelled: Some(false),
+                        file_path: None,
+                        error: Some(format!("序列化失败: {}", e)),
+                    });
+                }
+            };
             
-            std::fs::write(&path_str, data)
-                .map_err(|e| format!("写入文件失败: {}", e))?;
-            
-            Ok(FileOperationResult {
-                success: true,
-                cancelled: Some(false),
-                file_path: Some(path_str),
-                error: None,
-            })
+            match std::fs::write(&path_str, data) {
+                Ok(_) => Ok(FileOperationResult {
+                    success: true,
+                    cancelled: Some(false),
+                    file_path: Some(path_str),
+                    error: None,
+                }),
+                Err(e) => Ok(FileOperationResult {
+                    success: false,
+                    cancelled: Some(false),
+                    file_path: None,
+                    error: Some(format!("写入文件失败: {}", e)),
+                }),
+            }
         }
         None => Ok(FileOperationResult {
             success: false,

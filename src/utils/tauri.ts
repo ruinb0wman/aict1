@@ -7,9 +7,12 @@ import type { FileOperationResult, ImportFavoritesResult, ImportSettingsResult }
 // 设置导入导出
 export async function exportSettings(settings: Settings): Promise<FileOperationResult> {
   try {
+    console.log('[Export] Starting settings export...')
     const result = await invoke<FileOperationResult>('export_settings', { settings })
+    console.log('[Export] Settings export result:', result)
     return result
   } catch (error) {
+    console.error('[Export] Settings export error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : '导出失败'
@@ -32,9 +35,12 @@ export async function importSettings(): Promise<ImportSettingsResult> {
 // 收藏导入导出
 export async function exportFavorites(favorites: FavoriteWord[]): Promise<FileOperationResult> {
   try {
+    console.log('[Export] Starting favorites export...')
     const result = await invoke<FileOperationResult>('export_favorites', { favorites })
+    console.log('[Export] Favorites export result:', result)
     return result
   } catch (error) {
+    console.error('[Export] Favorites export error:', error)
     return {
       success: false,
       error: error instanceof Error ? error.message : '导出失败'
