@@ -260,9 +260,13 @@ pub fn run() {
                 let quit_i = MenuItem::with_id(app, "quit", "退出程序", true, None::<&str>)?;
                 let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
                 
-                // 创建托盘图标
+                // 创建托盘图标 - 使用 include_bytes 内嵌图标，避免路径问题
+                let tray_icon = tauri::image::Image::from_bytes(
+                    include_bytes!("../icons/tray_icon.png")
+                )?;
+                
                 let tray = TrayIconBuilder::new()
-                    .icon(app.default_window_icon().unwrap().clone())
+                    .icon(tray_icon)
                     .tooltip("AI Dictionary")
                     .menu(&menu)
                     .on_menu_event(|app, event| {
