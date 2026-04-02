@@ -200,7 +200,20 @@ async fn import_settings(app: tauri::AppHandle) -> Result<ImportSettingsResult, 
     }
 }
 
-/// 获取当前平台类型
+/// 打开开发者工具（生产环境也可用）
+#[tauri::command]
+async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
+    println!("[open_devtools] 收到打开 DevTools 请求");
+    if let Some(window) = app.get_webview_window("main") {
+        println!("[open_devtools] 找到主窗口，正在打开 DevTools");
+        window.open_devtools();
+        println!("[open_devtools] DevTools 已打开");
+        Ok(())
+    } else {
+        println!("[open_devtools] 错误：主窗口未找到");
+        Err("窗口未找到".to_string())
+    }
+}
 #[tauri::command]
 fn get_platform() -> &'static str {
     #[cfg(desktop)]
@@ -230,12 +243,6 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::default().build());
 
-    // 只在桌面端启用全局快捷键插件
-    #[cfg(desktop)]
-    {
-        builder = builder.plugin(tauri_plugin_global_shortcut::Builder::new().build());
-    }
-
     // 单例模式插件：只在桌面端启用
     #[cfg(desktop)]
     {
@@ -249,6 +256,7 @@ pub fn run() {
             export_settings,
             import_settings,
             get_platform,
+            open_devtools,
         ])
         .setup(|app| {
             #[cfg(desktop)]

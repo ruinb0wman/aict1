@@ -10,7 +10,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useHistoryStore } from '@/stores/historyStore'
 import { usePageTransition } from '@/hooks/usePageTransition'
-import { hideWindow } from '@/utils/tauri'
+import { hideWindow, openDevTools } from '@/utils/tauri'
 import './index.css'
 
 // 懒加载页面组件
@@ -55,11 +55,16 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Esc 键隐藏窗口
+  // Esc 键隐藏窗口，Ctrl+Shift+I 打开 DevTools
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         hideWindow()
+      }
+      // Ctrl+Shift+I 打开开发者工具
+      if (e.ctrlKey && e.shiftKey && e.key === 'I') {
+        e.preventDefault()
+        openDevTools()
       }
     }
 

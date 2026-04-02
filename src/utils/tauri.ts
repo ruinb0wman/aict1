@@ -181,3 +181,12 @@ export async function getPlatform(): Promise<'desktop' | 'mobile'> {
     return window.innerWidth < 768 ? 'mobile' : 'desktop'
   }
 }
+
+// 打开开发者工具
+export async function openDevTools(): Promise<void> {
+  try {
+    await invoke('open_devtools')
+  } catch {
+    console.log('openDevTools not supported on this platform')
+  }
+}
