@@ -2,15 +2,16 @@ import { create } from 'zustand'
 import { Settings, defaultSettings } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { indexedDBService } from '@/utils/indexedDB'
-import { exportSettings, importSettings } from '@/utils/tauri'
+import { exportData, importData } from '@/utils/tauri'
+import { useFavoritesStore } from './favoritesStore'
 
 interface SettingsState extends Settings {
   isLoading: boolean
   loadSettings: () => Promise<void>
   saveSettings: (settings: Partial<Settings>) => Promise<void>
   testConnection: () => Promise<{ success: boolean; message: string }>
-  exportSettings: () => Promise<void>
-  importSettings: () => Promise<boolean>
+  exportAllData: () => Promise<void>
+  importAllData: () => Promise<boolean>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -73,7 +74,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // 测试 API 连接
   testConnection: async () => {
     const { apiBaseUrl, apiKey, model } = get()
-    
+
     if (!apiKey) {
       return { success: false, message: '请先输入 API Key' }
     }
@@ -103,9 +104,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         setTimeout(() => {
           useAppStore.getState().showToast(`连接失败: ${message}`, 'error', 5000)
         }, 0)
-        return { 
-          success: false, 
-          message: `连接失败: ${message}` 
+        return {
+          success: false,
+          message: `连接失败: ${message}`
         }
       }
     } catch (error) {
@@ -113,15 +114,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       setTimeout(() => {
         useAppStore.getState().showToast(`网络错误: ${message}`, 'error', 5000)
       }, 0)
-      return { 
-        success: false, 
-        message: `网络错误: ${message}` 
+      return {
+        success: false,
+        message: `网络错误: ${message}`
       }
     }
   },
 
-  // 导出配置
-  exportSettings: async () => {
+  // 导出所有数据（设置 + 收藏）
+  exportAllData: async () => {
     try {
       const current = get()
       const settings = {
@@ -131,16 +132,19 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         temperature: current.temperature,
         historyLimit: current.historyLimit,
       }
-      
-      const result = await exportSettings(settings)
-      
+
+      // 获取收藏数据
+      const favorites = useFavoritesStore.getState().favorites
+
+      const result = await exportData(settings, favorites)
+
       if (result.cancelled) {
         return
       }
-      
+
       if (result.success && result.filePath) {
         setTimeout(() => {
-          useAppStore.getState().showToast('配置已导出', 'success')
+          useAppStore.getState().showToast(`数据已导出`, 'success')
         }, 0)
       } else {
         setTimeout(() => {
@@ -148,48 +152,54 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         }, 0)
       }
     } catch (error) {
-      console.error('Export settings failed:', error)
+      console.error('Export data failed:', error)
       setTimeout(() => {
         useAppStore.getState().showToast('导出失败', 'error')
       }, 0)
     }
   },
 
-  // 导入配置
-  importSettings: async () => {
+  // 导入所有数据（设置 + 收藏）
+  importAllData: async () => {
     try {
-      const result = await importSettings()
-      
+      const result = await importData()
+
       if (result.cancelled) {
         return false
       }
-      
-      if (!result.success || !result.settings) {
+
+      if (!result.success) {
         setTimeout(() => {
           useAppStore.getState().showToast(result.error || '导入失败', 'error')
         }, 0)
         return false
       }
 
-      const importedSettings = result.settings
-      const newSettings = {
-        apiBaseUrl: String(importedSettings.apiBaseUrl || ''),
-        apiKey: String(importedSettings.apiKey || ''),
-        model: String(importedSettings.model || ''),
-        temperature: Number(importedSettings.temperature) || 0.7,
-        historyLimit: Number(importedSettings.historyLimit) || 100,
+      // 导入设置
+      if (result.settings) {
+        const importedSettings = result.settings
+        const newSettings = {
+          apiBaseUrl: String(importedSettings.apiBaseUrl || ''),
+          apiKey: String(importedSettings.apiKey || ''),
+          model: String(importedSettings.model || ''),
+          temperature: Number(importedSettings.temperature) || 0.7,
+          historyLimit: Number(importedSettings.historyLimit) || 100,
+        }
+        await get().saveSettings(newSettings)
       }
-      
-      // 保存到 store
-      await get().saveSettings(newSettings)
-      
+
+      // 导入收藏
+      if (result.favorites && result.favorites.length > 0) {
+        await useFavoritesStore.getState().importFavoritesFromData(result.favorites)
+      }
+
       setTimeout(() => {
-        useAppStore.getState().showToast('配置已导入', 'success')
+        useAppStore.getState().showToast('数据已导入', 'success')
       }, 0)
-      
+
       return true
     } catch (error) {
-      console.error('Import settings failed:', error)
+      console.error('Import data failed:', error)
       setTimeout(() => {
         useAppStore.getState().showToast('导入失败', 'error')
       }, 0)

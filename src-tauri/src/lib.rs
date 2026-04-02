@@ -43,12 +43,26 @@ struct FileOperationResult {
     error: Option<String>,
 }
 
-// 导入收藏结果
+// 合并导出数据类型
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportData {
+    export_date: String,
+    app_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    settings: Option<Settings>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    favorites: Option<Vec<FavoriteWord>>,
+}
+
+// 导入合并数据结果
 #[derive(Debug, Clone, Serialize)]
-struct ImportFavoritesResult {
+struct ImportDataResult {
     success: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     cancelled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    settings: Option<Settings>,
     #[serde(skip_serializing_if = "Option::is_none")]
     favorites: Option<Vec<FavoriteWord>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -59,30 +73,23 @@ struct ImportFavoritesResult {
     error: Option<String>,
 }
 
-// 导入设置结果
-#[derive(Debug, Clone, Serialize)]
-struct ImportSettingsResult {
-    success: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    cancelled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    settings: Option<Settings>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<String>,
-}
-
-// 导出收藏
+// 导出合并数据
 #[tauri::command]
-async fn export_favorites(
+async fn export_data(
     app: tauri::AppHandle,
-    favorites: Vec<FavoriteWord>,
+    data: ExportData,
+    default_file_name: String,
 ) -> Result<FileOperationResult, String> {
-    let file_path = app.dialog().file().blocking_save_file();
-    
+    let file_path = app
+        .dialog()
+        .file()
+        .set_file_name(&default_file_name)
+        .blocking_save_file();
+
     match file_path {
         Some(path) => {
             let path_str: String = path.to_string();
-            let data = match serde_json::to_string_pretty(&favorites) {
+            let json_data = match serde_json::to_string_pretty(&data) {
                 Ok(d) => d,
                 Err(e) => {
                     return Ok(FileOperationResult {
@@ -93,8 +100,8 @@ async fn export_favorites(
                     });
                 }
             };
-            
-            match std::fs::write(&path_str, data) {
+
+            match std::fs::write(&path_str, json_data) {
                 Ok(_) => Ok(FileOperationResult {
                     success: true,
                     cancelled: Some(false),
@@ -118,112 +125,39 @@ async fn export_favorites(
     }
 }
 
-// 导入收藏
+// 导入合并数据
 #[tauri::command]
-async fn import_favorites(app: tauri::AppHandle) -> Result<ImportFavoritesResult, String> {
+async fn import_data(app: tauri::AppHandle) -> Result<ImportDataResult, String> {
     let file_path = app.dialog().file().blocking_pick_file();
-    
+
     match file_path {
         Some(path) => {
             let path_str: String = path.to_string();
             let data = std::fs::read_to_string(&path_str)
                 .map_err(|e| format!("读取文件失败: {}", e))?;
-            
-            let favorites: Vec<FavoriteWord> = serde_json::from_str(&data)
+
+            let export_data: ExportData = serde_json::from_str(&data)
                 .map_err(|e| format!("解析 JSON 失败: {}", e))?;
-            
-            Ok(ImportFavoritesResult {
+
+            let favorites_count = export_data.favorites.as_ref().map(|f| f.len()).unwrap_or(0);
+
+            Ok(ImportDataResult {
                 success: true,
                 cancelled: Some(false),
-                favorites: Some(favorites.clone()),
-                total_count: Some(favorites.len()),
-                valid_count: Some(favorites.len()),
+                settings: export_data.settings,
+                favorites: export_data.favorites,
+                total_count: Some(favorites_count),
+                valid_count: Some(favorites_count),
                 error: None,
             })
         }
-        None => Ok(ImportFavoritesResult {
-            success: false,
-            cancelled: Some(true),
-            favorites: None,
-            total_count: None,
-            valid_count: None,
-            error: None,
-        }),
-    }
-}
-
-// 导出设置
-#[tauri::command]
-async fn export_settings(
-    app: tauri::AppHandle,
-    settings: Settings,
-) -> Result<FileOperationResult, String> {
-    let file_path = app.dialog().file().blocking_save_file();
-    
-    match file_path {
-        Some(path) => {
-            let path_str: String = path.to_string();
-            let data = match serde_json::to_string_pretty(&settings) {
-                Ok(d) => d,
-                Err(e) => {
-                    return Ok(FileOperationResult {
-                        success: false,
-                        cancelled: Some(false),
-                        file_path: None,
-                        error: Some(format!("序列化失败: {}", e)),
-                    });
-                }
-            };
-            
-            match std::fs::write(&path_str, data) {
-                Ok(_) => Ok(FileOperationResult {
-                    success: true,
-                    cancelled: Some(false),
-                    file_path: Some(path_str),
-                    error: None,
-                }),
-                Err(e) => Ok(FileOperationResult {
-                    success: false,
-                    cancelled: Some(false),
-                    file_path: None,
-                    error: Some(format!("写入文件失败: {}", e)),
-                }),
-            }
-        }
-        None => Ok(FileOperationResult {
-            success: false,
-            cancelled: Some(true),
-            file_path: None,
-            error: None,
-        }),
-    }
-}
-
-// 导入设置
-#[tauri::command]
-async fn import_settings(app: tauri::AppHandle) -> Result<ImportSettingsResult, String> {
-    let file_path = app.dialog().file().blocking_pick_file();
-    
-    match file_path {
-        Some(path) => {
-            let path_str: String = path.to_string();
-            let data = std::fs::read_to_string(&path_str)
-                .map_err(|e| format!("读取文件失败: {}", e))?;
-            
-            let settings: Settings = serde_json::from_str(&data)
-                .map_err(|e| format!("解析 JSON 失败: {}", e))?;
-            
-            Ok(ImportSettingsResult {
-                success: true,
-                cancelled: Some(false),
-                settings: Some(settings),
-                error: None,
-            })
-        }
-        None => Ok(ImportSettingsResult {
+        None => Ok(ImportDataResult {
             success: false,
             cancelled: Some(true),
             settings: None,
+            favorites: None,
+            total_count: None,
+            valid_count: None,
             error: None,
         }),
     }
@@ -307,10 +241,8 @@ pub fn run() {
 
     builder
         .invoke_handler(tauri::generate_handler![
-            export_favorites,
-            import_favorites,
-            export_settings,
-            import_settings,
+            export_data,
+            import_data,
             get_platform,
             open_devtools,
             show_window,

@@ -30,21 +30,22 @@ export interface FileOperationResult {
   error?: string;
 }
 
-// 导入收藏结果
-export interface ImportFavoritesResult {
+// 导出数据类型
+export interface ExportData {
+  exportDate: string;
+  appVersion: string;
+  settings?: Settings;
+  favorites?: FavoriteWord[];
+}
+
+// 导入合并数据结果
+export interface ImportDataResult {
   success: boolean;
   cancelled?: boolean;
+  settings?: Settings;
   favorites?: FavoriteWord[];
   totalCount?: number;
   validCount?: number;
-  error?: string;
-}
-
-// 设置导入结果
-export interface ImportSettingsResult {
-  success: boolean;
-  cancelled?: boolean;
-  settings?: Partial<Settings>;
   error?: string;
 }
 

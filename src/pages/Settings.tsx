@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Download, Upload } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { useFavoritesStore } from '@/stores/favoritesStore'
 
 export function Settings() {
   const settings = useSettingsStore()
-  const favorites = useFavoritesStore()
   const [formData, setFormData] = useState({
     apiBaseUrl: settings.apiBaseUrl,
     apiKey: settings.apiKey,
@@ -15,10 +13,8 @@ export function Settings() {
   })
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [isExportingSettings, setIsExportingSettings] = useState(false)
-  const [isImportingSettings, setIsImportingSettings] = useState(false)
-  const [isExportingFavorites, setIsExportingFavorites] = useState(false)
-  const [isImportingFavorites, setIsImportingFavorites] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+  const [isImporting, setIsImporting] = useState(false)
 
   // 加载设置
   useEffect(() => {
@@ -49,8 +45,8 @@ export function Settings() {
     const { name, value } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'temperature' || name === 'historyLimit' 
-        ? parseFloat(value) 
+      [name]: name === 'temperature' || name === 'historyLimit'
+        ? parseFloat(value)
         : value,
     }))
   }
@@ -72,38 +68,26 @@ export function Settings() {
     setIsTesting(false)
   }
 
-  const handleExportSettings = async () => {
-    setIsExportingSettings(true)
-    await settings.exportSettings()
-    setIsExportingSettings(false)
+  const handleExport = async () => {
+    setIsExporting(true)
+    await settings.exportAllData()
+    setIsExporting(false)
   }
 
-  const handleImportSettings = async () => {
-    setIsImportingSettings(true)
-    const success = await settings.importSettings()
+  const handleImport = async () => {
+    setIsImporting(true)
+    const success = await settings.importAllData()
     if (success) {
       // 重新加载设置以更新表单
       await settings.loadSettings()
     }
-    setIsImportingSettings(false)
-  }
-
-  const handleExportFavorites = async () => {
-    setIsExportingFavorites(true)
-    await favorites.exportFavorites()
-    setIsExportingFavorites(false)
-  }
-
-  const handleImportFavorites = async () => {
-    setIsImportingFavorites(true)
-    await favorites.importFavorites()
-    setIsImportingFavorites(false)
+    setIsImporting(false)
   }
 
   return (
     <div className="settings-page">
       <h2 className="page-title">设置</h2>
-      
+
       <div className="settings-form">
         <div className="form-group">
           <label htmlFor="apiBaseUrl">API Base URL</label>
@@ -207,71 +191,36 @@ export function Settings() {
       <div className="settings-section data-management">
         <h3 className="section-title">数据管理</h3>
 
-        <div className="data-management-grid">
-          <div className="data-management-item">
-            <div className="data-management-info">
-              <h4>配置</h4>
-              <p>导出或导入 API 设置</p>
-            </div>
-            <div className="data-management-actions">
-              <button
-                className="btn btn-secondary btn-small"
-                onClick={handleExportSettings}
-                disabled={isExportingSettings}
-              >
-                {isExportingSettings ? (
-                  <Loader2 size={14} strokeWidth={1.5} className="spin" />
-                ) : (
-                  <Download size={14} strokeWidth={1.5} />
-                )}
-                导出
-              </button>
-              <button
-                className="btn btn-secondary btn-small"
-                onClick={handleImportSettings}
-                disabled={isImportingSettings}
-              >
-                {isImportingSettings ? (
-                  <Loader2 size={14} strokeWidth={1.5} className="spin" />
-                ) : (
-                  <Upload size={14} strokeWidth={1.5} />
-                )}
-                导入
-              </button>
-            </div>
+        <div className="data-management-item">
+          <div className="data-management-info">
+            <h4>导出/导入数据</h4>
+            <p>导出或导入所有数据（包括设置和收藏的单词）</p>
           </div>
-
-          <div className="data-management-item">
-            <div className="data-management-info">
-              <h4>收藏</h4>
-              <p>导出或导入收藏的单词</p>
-            </div>
-            <div className="data-management-actions">
-              <button
-                className="btn btn-secondary btn-small"
-                onClick={handleExportFavorites}
-                disabled={isExportingFavorites}
-              >
-                {isExportingFavorites ? (
-                  <Loader2 size={14} strokeWidth={1.5} className="spin" />
-                ) : (
-                  <Download size={14} strokeWidth={1.5} />
-                )}
-                导出
-              </button>
-              <button
-                className="btn btn-secondary btn-small"
-                onClick={handleImportFavorites}
-                disabled={isImportingFavorites}
-              >
-                {isImportingFavorites ? (
-                  <Loader2 size={14} strokeWidth={1.5} className="spin" />
-                ) : (
-                  <Upload size={14} strokeWidth={1.5} />
-                )}
-                导入
-              </button>
-            </div>
+          <div className="data-management-actions">
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <Loader2 size={14} strokeWidth={1.5} className="spin" />
+              ) : (
+                <Download size={14} strokeWidth={1.5} />
+              )}
+              导出
+            </button>
+            <button
+              className="btn btn-secondary btn-small"
+              onClick={handleImport}
+              disabled={isImporting}
+            >
+              {isImporting ? (
+                <Loader2 size={14} strokeWidth={1.5} className="spin" />
+              ) : (
+                <Upload size={14} strokeWidth={1.5} />
+              )}
+              导入
+            </button>
           </div>
         </div>
       </div>

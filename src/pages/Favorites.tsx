@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Star, Trash2, Loader2, Download, Upload } from 'lucide-react'
+import { Search, Star, Trash2, Loader2 } from 'lucide-react'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useAppStore } from '@/stores/appStore'
 import type { FavoriteWord } from '@/types'
@@ -12,9 +12,6 @@ export function Favorites() {
     removeFavorite,
     setSearchQuery,
     getFilteredFavorites,
-    exportFavorites,
-    importFavorites,
-    favorites
   } = useFavoritesStore()
   const { setQueryResult, setCurrentPage, setLastQuery } = useAppStore()
   const [removingId, setRemovingId] = useState<string | null>(null)
@@ -46,16 +43,6 @@ export function Favorites() {
   // 过滤后的收藏列表
   const filteredFavorites = getFilteredFavorites()
 
-  // 处理导入
-  const handleImport = async () => {
-    await importFavorites()
-  }
-
-  // 处理导出
-  const handleExport = async () => {
-    await exportFavorites()
-  }
-
   // 格式化时间
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp)
@@ -67,27 +54,7 @@ export function Favorites() {
 
   return (
     <div className="favorites-page">
-      <div className="favorites-header">
-        <h2 className="page-title">收藏</h2>
-        <div className="favorites-actions">
-          <button
-            className="favorites-action-btn"
-            onClick={handleImport}
-            title="导入收藏"
-            disabled={isLoading}
-          >
-            <Download size={18} strokeWidth={1.5} />
-          </button>
-          <button
-            className="favorites-action-btn"
-            onClick={handleExport}
-            title="导出收藏"
-            disabled={isLoading || favorites.length === 0}
-          >
-            <Upload size={18} strokeWidth={1.5} />
-          </button>
-        </div>
-      </div>
+      <h2 className="page-title">收藏</h2>
 
       {/* 搜索框 */}
       <div className="search-box">

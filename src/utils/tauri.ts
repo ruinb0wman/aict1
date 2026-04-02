@@ -2,60 +2,58 @@
 
 import { invoke } from '@tauri-apps/api/core'
 import type { Settings, FavoriteWord } from '@/types'
-import type { FileOperationResult, ImportFavoritesResult, ImportSettingsResult } from '@/types/tauri'
+import type { FileOperationResult, ImportDataResult } from '@/types/tauri'
 
-// 设置导入导出
-export async function exportSettings(settings: Settings): Promise<FileOperationResult> {
+// 生成 yyyy-MM-dd_hh-mm-ss 格式的文件名
+function generateFileName(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const seconds = String(now.getSeconds()).padStart(2, '0')
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}.json`
+}
+
+// 导出合并数据（设置 + 收藏）
+export async function exportData(
+  settings: Settings,
+  favorites: FavoriteWord[]
+): Promise<FileOperationResult> {
   try {
-    console.log('[Export] Starting settings export...')
-    const result = await invoke<FileOperationResult>('export_settings', { settings })
-    console.log('[Export] Settings export result:', result)
+    console.log('[Export] Starting data export...')
+    const defaultFileName = generateFileName()
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      appVersion: '1.0.0',
+      settings,
+      favorites,
+    }
+    const result = await invoke<FileOperationResult>('export_data', {
+      data: exportData,
+      defaultFileName,
+    })
+    console.log('[Export] Data export result:', result)
     return result
   } catch (error) {
-    console.error('[Export] Settings export error:', error)
+    console.error('[Export] Data export error:', error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : '导出失败'
+      error: error instanceof Error ? error.message : '导出失败',
     }
   }
 }
 
-export async function importSettings(): Promise<ImportSettingsResult> {
+// 导入合并数据（设置 + 收藏）
+export async function importData(): Promise<ImportDataResult> {
   try {
-    const result = await invoke<ImportSettingsResult>('import_settings')
+    const result = await invoke<ImportDataResult>('import_data')
     return result
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : '导入失败'
-    }
-  }
-}
-
-// 收藏导入导出
-export async function exportFavorites(favorites: FavoriteWord[]): Promise<FileOperationResult> {
-  try {
-    console.log('[Export] Starting favorites export...')
-    const result = await invoke<FileOperationResult>('export_favorites', { favorites })
-    console.log('[Export] Favorites export result:', result)
-    return result
-  } catch (error) {
-    console.error('[Export] Favorites export error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '导出失败'
-    }
-  }
-}
-
-export async function importFavorites(): Promise<ImportFavoritesResult> {
-  try {
-    const result = await invoke<ImportFavoritesResult>('import_favorites')
-    return result
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : '导入失败'
+      error: error instanceof Error ? error.message : '导入失败',
     }
   }
 }
@@ -68,10 +66,10 @@ export async function speak(text: string): Promise<boolean> {
   }
 
   const synth = window.speechSynthesis
-  
+
   // 获取语音列表
   let voices = synth.getVoices()
-  
+
   // 如果语音列表为空，等待加载
   if (voices.length === 0) {
     await new Promise<void>((resolve) => {
@@ -81,7 +79,7 @@ export async function speak(text: string): Promise<boolean> {
         resolve()
       }
       synth.onvoiceschanged = handleVoicesChanged
-      
+
       // 超时处理
       setTimeout(() => {
         synth.onvoiceschanged = null
@@ -91,11 +89,13 @@ export async function speak(text: string): Promise<boolean> {
   }
 
   // 选择英语语音
-  let selectedVoice = voices.find(v => 
-    v.name.includes('Google US English') || 
-    v.name.includes('Microsoft David') ||
-    v.name.includes('Samantha')
-  ) || voices.find(v => v.lang.startsWith('en'))
+  let selectedVoice =
+    voices.find(
+      (v) =>
+        v.name.includes('Google US English') ||
+        v.name.includes('Microsoft David') ||
+        v.name.includes('Samantha')
+    ) || voices.find((v) => v.lang.startsWith('en'))
 
   if (!selectedVoice && voices.length > 0) {
     selectedVoice = voices[0]
@@ -105,11 +105,11 @@ export async function speak(text: string): Promise<boolean> {
   synth.cancel()
 
   const utterance = new SpeechSynthesisUtterance(text)
-  
+
   if (selectedVoice) {
     utterance.voice = selectedVoice
   }
-  
+
   utterance.lang = 'en-US'
   utterance.rate = 0.9
   utterance.pitch = 1

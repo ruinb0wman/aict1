@@ -2,13 +2,12 @@ import { create } from 'zustand'
 import { FavoriteWord, QueryResult } from '@/types'
 import { indexedDBService } from '@/utils/indexedDB'
 import { useAppStore } from '@/stores/appStore'
-import { exportFavorites, importFavorites } from '@/utils/tauri'
 
 interface FavoritesState {
   favorites: FavoriteWord[]
   isLoading: boolean
   searchQuery: string
-  
+
   // 加载收藏
   loadFavorites: () => Promise<void>
   // 添加收藏
@@ -32,10 +31,8 @@ interface FavoritesState {
   updateReviewStatus: (id: string, known: boolean) => Promise<void>
   // 获取今日复习进度
   getTodayReviewProgress: () => { total: number; reviewed: number }
-  // 导出收藏
-  exportFavorites: () => Promise<void>
-  // 导入收藏
-  importFavorites: () => Promise<{ imported: number; skipped: number }>
+  // 从合并数据中导入收藏
+  importFavoritesFromData: (favorites: FavoriteWord[]) => Promise<{ imported: number; skipped: number }>
 }
 
 // 获取主要翻译（用于列表展示）
@@ -80,7 +77,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   // 添加收藏
   addFavorite: async (word, queryData) => {
     const { favorites } = get()
-    
+
     // 检查是否已存在
     if (favorites.some(f => f.word.toLowerCase() === word.toLowerCase())) {
       return
@@ -115,7 +112,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   removeFavorite: async (id) => {
     const { favorites } = get()
     const favorite = favorites.find(f => f.id === id)
-    
+
     try {
       await indexedDBService.removeFavorite(id)
       set({ favorites: favorites.filter(f => f.id !== id) })
@@ -170,7 +167,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
       return favorites
     }
     const query = searchQuery.toLowerCase()
-    return favorites.filter(f => 
+    return favorites.filter(f =>
       f.word.toLowerCase().includes(query) ||
       f.translation.toLowerCase().includes(query)
     )
@@ -225,7 +222,7 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
     today.setHours(0, 0, 0, 0)
     const todayTimestamp = today.getTime()
 
-    const reviewed = favorites.filter(f => 
+    const reviewed = favorites.filter(f =>
       f.lastReviewedAt && f.lastReviewedAt >= todayTimestamp
     ).length
 
@@ -235,103 +232,51 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
     }
   },
 
-  // 导出收藏
-  exportFavorites: async () => {
-    const { favorites } = get()
-    
-    if (favorites.length === 0) {
-      setTimeout(() => {
-        useAppStore.getState().showToast('没有可导出的收藏', 'warning')
-      }, 0)
-      return
-    }
-
-    try {
-      const result = await exportFavorites(favorites)
-      
-      if (result.cancelled) {
-        return
-      }
-      
-      if (result.success && result.filePath) {
-        setTimeout(() => {
-          useAppStore.getState().showToast(`已导出 ${favorites.length} 个收藏`, 'success')
-        }, 0)
-      } else {
-        setTimeout(() => {
-          useAppStore.getState().showToast(result.error || '导出失败', 'error')
-        }, 0)
-      }
-    } catch (error) {
-      console.error('Export favorites failed:', error)
-      setTimeout(() => {
-        useAppStore.getState().showToast('导出失败', 'error')
-      }, 0)
-    }
-  },
-
-  // 导入收藏
-  importFavorites: async () => {
-    try {
-      const result = await importFavorites()
-      
-      if (result.cancelled) {
-        return { imported: 0, skipped: 0 }
-      }
-      
-      if (!result.success || !result.favorites) {
-        setTimeout(() => {
-          useAppStore.getState().showToast(result.error || '导入失败', 'error')
-        }, 0)
-        return { imported: 0, skipped: 0 }
-      }
-
-      const { favorites: currentFavorites } = get()
-      const existingWords = new Set(currentFavorites.map(f => f.word.toLowerCase()))
-      
-      let imported = 0
-      let skipped = 0
-
-      for (const favorite of result.favorites) {
-        // 检查是否已存在
-        if (existingWords.has(favorite.word.toLowerCase())) {
-          skipped++
-          continue
-        }
-
-        try {
-          // 添加新收藏，重新生成 ID 避免冲突
-          const newFavorite: FavoriteWord = {
-            ...favorite,
-            id: crypto.randomUUID(),
-            createdAt: Date.now(),
-          }
-          await indexedDBService.addFavorite(newFavorite)
-          imported++
-        } catch (error) {
-          console.error(`Failed to import favorite "${favorite.word}":`, error)
-          skipped++
-        }
-      }
-
-      // 重新加载收藏列表
-      await get().loadFavorites()
-
-      setTimeout(() => {
-        if (imported > 0) {
-          useAppStore.getState().showToast(`成功导入 ${imported} 个收藏${skipped > 0 ? `，跳过 ${skipped} 个重复` : ''}`, 'success')
-        } else {
-          useAppStore.getState().showToast(`没有新收藏可导入${skipped > 0 ? `（${skipped} 个重复）` : ''}`, 'warning')
-        }
-      }, 0)
-
-      return { imported, skipped }
-    } catch (error) {
-      console.error('Import favorites failed:', error)
-      setTimeout(() => {
-        useAppStore.getState().showToast('导入失败', 'error')
-      }, 0)
+  // 从合并数据中导入收藏
+  importFavoritesFromData: async (favoritesToImport) => {
+    if (!favoritesToImport || favoritesToImport.length === 0) {
       return { imported: 0, skipped: 0 }
     }
+
+    const { favorites: currentFavorites } = get()
+    const existingWords = new Set(currentFavorites.map(f => f.word.toLowerCase()))
+
+    let imported = 0
+    let skipped = 0
+
+    for (const favorite of favoritesToImport) {
+      // 检查是否已存在
+      if (existingWords.has(favorite.word.toLowerCase())) {
+        skipped++
+        continue
+      }
+
+      try {
+        // 添加新收藏，重新生成 ID 避免冲突
+        const newFavorite: FavoriteWord = {
+          ...favorite,
+          id: crypto.randomUUID(),
+          createdAt: Date.now(),
+        }
+        await indexedDBService.addFavorite(newFavorite)
+        imported++
+      } catch (error) {
+        console.error(`Failed to import favorite "${favorite.word}":`, error)
+        skipped++
+      }
+    }
+
+    // 重新加载收藏列表
+    await get().loadFavorites()
+
+    setTimeout(() => {
+      if (imported > 0) {
+        useAppStore.getState().showToast(`成功导入 ${imported} 个收藏${skipped > 0 ? `，跳过 ${skipped} 个重复` : ''}`, 'success')
+      } else if (skipped > 0) {
+        useAppStore.getState().showToast(`没有新收藏可导入（${skipped} 个重复）`, 'warning')
+      }
+    }, 0)
+
+    return { imported, skipped }
   },
 }))
