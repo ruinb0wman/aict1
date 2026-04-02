@@ -33,7 +33,7 @@ cd YOUR_REPO_NAME
 
 | 文件 | 占位符 | 替换为 |
 |------|--------|--------|
-| `package.json` | `"name": "tauri2template"` | 你的 npm 包名（如 `my-tauri-app`） |
+| `package.json` | `"name": "tauri2template"` | 你的包名（如 `my-tauri-app`） |
 | `src-tauri/Cargo.toml` | `name = "tauri2template"` | 你的 Rust crate 名（如 `my_tauri_app`） |
 | `src-tauri/Cargo.toml` | `name = "tauri2template_lib"` | 你的 lib 名（如 `my_tauri_app_lib`） |
 | `src-tauri/tauri.conf.json` | `"productName": "tauri2template"` | 应用显示名称（如 `"My Tauri App"`） |
@@ -46,38 +46,30 @@ cd YOUR_REPO_NAME
 
 ### 4. 安装依赖
 
+使用 [bun](https://bun.sh/)（推荐）：
+
 ```bash
-# 使用 npm
-npm install
-
-# 或使用 bun
 bun install
-
-# 或使用 pnpm
-pnpm install
-
-# 或使用 yarn
-yarn install
 ```
 
 ### 5. 运行开发服务器
 
 ```bash
 # 仅前端开发
-npm run dev
+bun run dev
 
 # 完整 Tauri 开发（推荐）
-npm run dev:pc
+bun run dev:pc
 ```
 
 ### 6. 构建应用
 
 ```bash
 # 构建前端
-npm run build
+bun run build
 
 # 构建 Tauri 应用
-npm run build:pc
+bun run build:pc
 ```
 
 构建完成后，可在 `src-tauri/target/release/` 找到可执行文件。
@@ -107,7 +99,7 @@ Tauri 提供了丰富的官方插件，可按需添加：
 
 ```bash
 # 添加插件（以 HTTP 为例）
-npm install @tauri-apps/plugin-http
+bun add @tauri-apps/plugin-http
 ```
 
 然后在 `src-tauri/Cargo.toml` 添加：
@@ -139,10 +131,10 @@ tauri-plugin-http = "2"
 
 ```bash
 # 确保已安装移动开发依赖
-npm install -g @tauri-apps/cli
+bun install -g @tauri-apps/cli
 
 # Android 开发
-npm run tauri android dev
+bun run tauri android dev
 ```
 
 ### Q: 如何禁用单例模式？
