@@ -1,5 +1,4 @@
 use tauri::Manager;
-use tauri::Emitter;
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 
@@ -186,7 +185,8 @@ fn get_platform() -> &'static str {
     }
 }
 
-/// 显示窗口
+/// 显示窗口 (桌面端)
+#[cfg(desktop)]
 #[tauri::command]
 async fn show_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -198,7 +198,16 @@ async fn show_window(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
-/// 隐藏窗口
+/// 显示窗口 (移动端 - 空实现)
+#[cfg(mobile)]
+#[tauri::command]
+async fn show_window(_app: tauri::AppHandle) -> Result<(), String> {
+    // 移动端不支持窗口显示/隐藏操作
+    Ok(())
+}
+
+/// 隐藏窗口 (桌面端)
+#[cfg(desktop)]
 #[tauri::command]
 async fn hide_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -207,6 +216,14 @@ async fn hide_window(app: tauri::AppHandle) -> Result<(), String> {
     } else {
         Err("窗口未找到".to_string())
     }
+}
+
+/// 隐藏窗口 (移动端 - 空实现)
+#[cfg(mobile)]
+#[tauri::command]
+async fn hide_window(_app: tauri::AppHandle) -> Result<(), String> {
+    // 移动端不支持窗口显示/隐藏操作
+    Ok(())
 }
 
 /// 退出应用程序
@@ -218,6 +235,8 @@ fn quit_app(app: tauri::AppHandle) {
 /// 处理单例模式：当第二个实例启动时，聚焦到已存在的窗口
 #[cfg(desktop)]
 fn handle_single_instance(app: &tauri::AppHandle, _args: Vec<String>, _cwd: String) {
+    use tauri::Emitter;
+
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
@@ -308,13 +327,16 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            match event {
-                tauri::WindowEvent::CloseRequested { api, .. } => {
-                    // 阻止默认关闭行为，改为隐藏窗口
-                    api.prevent_close();
-                    let _ = window.hide();
+            #[cfg(desktop)]
+            {
+                match event {
+                    tauri::WindowEvent::CloseRequested { api, .. } => {
+                        // 阻止默认关闭行为，改为隐藏窗口
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         })
         .run(tauri::generate_context!())
