@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host --port 1420",
     "dev:pc": "tauri dev --no-dev-server",
-    "dev:android": "tauri android dev",
+    "dev:android": "tauri android dev --host 192.168.1.5 --no-dev-server",
     "dev:ios": "tauri ios dev",
     "build": "tsc && vite build",
     "build:pc": "tauri build",
