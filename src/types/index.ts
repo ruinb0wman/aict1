@@ -61,6 +61,8 @@ export type Settings = {
   model: string;
   temperature: number;
   historyLimit: number;
+  clipboardTranslationEnabled: boolean;
+  clipboardTranslationInterval: number;
 };
 
 export const defaultSettings: Settings = {
@@ -69,6 +71,8 @@ export const defaultSettings: Settings = {
   model: 'gpt-3.5-turbo',
   temperature: 0.7,
   historyLimit: 100,
+  clipboardTranslationEnabled: false,
+  clipboardTranslationInterval: 1000,
 };
 
 // ==================== Toast 类型 ====================
@@ -125,4 +129,5 @@ export type AppState = {
   error: string | null;
   lastQuery: string;
   toast: ToastState | null;
+  clipboardText: string;
 };

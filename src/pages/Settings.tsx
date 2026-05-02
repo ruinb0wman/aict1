@@ -10,6 +10,8 @@ export function Settings() {
     model: settings.model,
     temperature: settings.temperature,
     historyLimit: settings.historyLimit,
+    clipboardTranslationEnabled: settings.clipboardTranslationEnabled,
+    clipboardTranslationInterval: settings.clipboardTranslationInterval,
   })
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -30,6 +32,8 @@ export function Settings() {
       model: settings.model,
       temperature: settings.temperature,
       historyLimit: settings.historyLimit,
+      clipboardTranslationEnabled: settings.clipboardTranslationEnabled,
+      clipboardTranslationInterval: settings.clipboardTranslationInterval,
     })
   }, [
     settings.apiBaseUrl,
@@ -37,18 +41,36 @@ export function Settings() {
     settings.model,
     settings.temperature,
     settings.historyLimit,
+    settings.clipboardTranslationEnabled,
+    settings.clipboardTranslationInterval,
   ])
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    const { name, value } = e.target
+    const { name, value, type } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'temperature' || name === 'historyLimit'
+      [name]: type === 'checkbox'
+        ? (e.target as HTMLInputElement).checked
+        : name === 'temperature' || name === 'historyLimit' || name === 'clipboardTranslationInterval'
         ? parseFloat(value)
         : value,
     }))
+  }
+
+  const handleClipboardToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = e.target.checked
+    setFormData((prev) => ({ ...prev, clipboardTranslationEnabled: enabled }))
+    await settings.updateClipboardMonitorSettings(enabled, formData.clipboardTranslationInterval)
+  }
+
+  const handleClipboardIntervalChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const interval = parseFloat(e.target.value)
+    setFormData((prev) => ({ ...prev, clipboardTranslationInterval: interval }))
+    if (formData.clipboardTranslationEnabled) {
+      await settings.updateClipboardMonitorSettings(true, interval)
+    }
   }
 
   const handleSave = async () => {
@@ -185,6 +207,44 @@ export function Settings() {
               '保存设置'
             )}
           </button>
+        </div>
+      </div>
+
+      <div className="settings-section clipboard-section">
+        <h3 className="section-title">剪切板翻译</h3>
+        <p className="section-desc">在任意应用中双击 Ctrl+C 触发翻译</p>
+
+        <div className="form-group checkbox-group">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              name="clipboardTranslationEnabled"
+              checked={formData.clipboardTranslationEnabled}
+              onChange={handleClipboardToggle}
+            />
+            <span className="checkbox-text">启用剪切板翻译</span>
+          </label>
+        </div>
+
+        <div className={`form-group ${!formData.clipboardTranslationEnabled ? 'disabled' : ''}`}>
+          <label htmlFor="clipboardTranslationInterval">
+            触发间隔: {(formData.clipboardTranslationInterval / 1000).toFixed(1)} 秒
+          </label>
+          <input
+            type="range"
+            id="clipboardTranslationInterval"
+            name="clipboardTranslationInterval"
+            min="200"
+            max="3000"
+            step="100"
+            value={formData.clipboardTranslationInterval}
+            onChange={handleClipboardIntervalChange}
+            disabled={!formData.clipboardTranslationEnabled}
+          />
+          <div className="range-labels">
+            <span>0.2s</span>
+            <span>3.0s</span>
+          </div>
         </div>
       </div>
 

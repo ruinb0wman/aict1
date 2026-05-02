@@ -10,7 +10,7 @@ import { IndexedDBService } from '@/utils/indexedDB'
 export function SearchBox() {
   const [input, setInput] = useState('')
   const [isFromCache, setIsFromCache] = useState(false)
-  const { isLoading, setLoading, setQueryResult, setError, setLastQuery, lastQuery, showToast } = useAppStore()
+  const { isLoading, setLoading, setQueryResult, setError, setLastQuery, lastQuery, showToast, clipboardText, setClipboardText } = useAppStore()
   const settings = useSettingsStore()
   const { addHistory } = useHistoryStore()
   const { saveWordToCache, getWordFromCache } = useWordsStore()
@@ -91,8 +91,15 @@ export function SearchBox() {
     useWordsStore.getState().init()
   }, [])
 
-  // 注意：剪切板监听功能需要 Tauri clipboard 插件，暂时禁用
-  // 如需启用，请安装 @tauri-apps/plugin-clipboard-manager
+  // 监听剪切板翻译事件
+  useEffect(() => {
+    if (clipboardText) {
+      setInput(clipboardText)
+      setClipboardText('')
+      performSearch(clipboardText)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipboardText])
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {

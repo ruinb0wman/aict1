@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { Settings, defaultSettings } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { indexedDBService } from '@/utils/indexedDB'
-import { exportData, importData } from '@/utils/tauri'
+import { exportData, importData, updateClipboardMonitor } from '@/utils/tauri'
 import { useFavoritesStore } from './favoritesStore'
 
 interface SettingsState extends Settings {
@@ -12,6 +12,8 @@ interface SettingsState extends Settings {
   testConnection: () => Promise<{ success: boolean; message: string }>
   exportAllData: () => Promise<void>
   importAllData: () => Promise<boolean>
+  initClipboardMonitor: () => Promise<void>
+  updateClipboardMonitorSettings: (enabled: boolean, interval: number) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -31,6 +33,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           model: savedSettings.model || defaultSettings.model,
           temperature: savedSettings.temperature ?? defaultSettings.temperature,
           historyLimit: savedSettings.historyLimit || defaultSettings.historyLimit,
+          clipboardTranslationEnabled: savedSettings.clipboardTranslationEnabled ?? defaultSettings.clipboardTranslationEnabled,
+          clipboardTranslationInterval: savedSettings.clipboardTranslationInterval ?? defaultSettings.clipboardTranslationInterval,
           isLoading: false,
         })
       } else {
@@ -56,6 +60,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         model: newSettings.model ?? current.model,
         temperature: newSettings.temperature ?? current.temperature,
         historyLimit: newSettings.historyLimit ?? current.historyLimit,
+        clipboardTranslationEnabled: newSettings.clipboardTranslationEnabled ?? current.clipboardTranslationEnabled,
+        clipboardTranslationInterval: newSettings.clipboardTranslationInterval ?? current.clipboardTranslationInterval,
       }
       await indexedDBService.saveSettings(merged)
       set({ ...merged, isLoading: false })
@@ -131,6 +137,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         model: current.model,
         temperature: current.temperature,
         historyLimit: current.historyLimit,
+        clipboardTranslationEnabled: current.clipboardTranslationEnabled,
+        clipboardTranslationInterval: current.clipboardTranslationInterval,
       }
 
       // 获取收藏数据
@@ -204,6 +212,35 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         useAppStore.getState().showToast('导入失败', 'error')
       }, 0)
       return false
+    }
+  },
+
+  // 初始化剪切板监听（应用启动时调用）
+  initClipboardMonitor: async () => {
+    try {
+      const current = get()
+      await updateClipboardMonitor(
+        current.clipboardTranslationEnabled,
+        current.clipboardTranslationInterval
+      )
+    } catch (error) {
+      console.error('Failed to init clipboard monitor:', error)
+    }
+  },
+
+  // 更新剪切板监听设置
+  updateClipboardMonitorSettings: async (enabled, interval) => {
+    try {
+      await updateClipboardMonitor(enabled, interval)
+      await get().saveSettings({
+        clipboardTranslationEnabled: enabled,
+        clipboardTranslationInterval: interval,
+      })
+    } catch (error) {
+      console.error('Failed to update clipboard monitor:', error)
+      setTimeout(() => {
+        useAppStore.getState().showToast('剪切板监听设置失败', 'error')
+      }, 0)
     }
   },
 }))

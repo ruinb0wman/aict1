@@ -11,6 +11,9 @@ interface AppStore extends AppState {
   setError: (error: string | null) => void
   setLastQuery: (query: string) => void
   
+  // 剪切板文本
+  setClipboardText: (text: string) => void
+  
   // Toast 提示
   showToast: (message: string, type: ToastState['type'], duration?: number) => void
   hideToast: () => void
@@ -26,6 +29,7 @@ const initialState: AppState = {
   error: null,
   lastQuery: '',
   toast: null,
+  clipboardText: '',
 }
 
 export const useAppStore = create<AppStore>((set) => ({
@@ -40,6 +44,8 @@ export const useAppStore = create<AppStore>((set) => ({
   setError: (error) => set({ error }),
   
   setLastQuery: (query) => set({ lastQuery: query }),
+  
+  setClipboardText: (text) => set({ clipboardText: text }),
   
   showToast: (message, type, duration = 3000) => set({
     toast: { message, type, duration, visible: true }

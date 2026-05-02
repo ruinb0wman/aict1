@@ -9,6 +9,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useHistoryStore } from '@/stores/historyStore'
+import { useAppStore } from '@/stores/appStore'
 import { usePageTransition } from '@/hooks/usePageTransition'
 import { openDevTools } from '@/utils/tauri'
 import './index.css'
@@ -43,17 +44,48 @@ function SearchPage() {
 
 function AppContent() {
   const { displayPage, animationClass } = usePageTransition()
-  const { loadSettings } = useSettingsStore()
+  const { loadSettings, initClipboardMonitor } = useSettingsStore()
   const { loadFavorites } = useFavoritesStore()
   const { loadHistory } = useHistoryStore()
+  const { setCurrentPage, setClipboardText } = useAppStore()
 
   // 应用启动时加载设置、收藏和历史
   useEffect(() => {
-    loadSettings()
+    loadSettings().then(() => {
+      initClipboardMonitor()
+    })
     loadFavorites()
     loadHistory()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 监听剪切板翻译事件
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+
+    const setupListener = async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event')
+        unlisten = await listen('clipboard-translate', (event) => {
+          const payload = event.payload as { text?: string }
+          if (payload.text) {
+            setCurrentPage('search')
+            setClipboardText(payload.text)
+          }
+        })
+      } catch (error) {
+        console.error('Failed to setup clipboard listener:', error)
+      }
+    }
+
+    setupListener()
+
+    return () => {
+      if (unlisten) {
+        unlisten()
+      }
+    }
+  }, [setCurrentPage, setClipboardText])
 
   // Ctrl+Shift+I 打开 DevTools
   useEffect(() => {

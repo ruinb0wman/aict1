@@ -166,3 +166,25 @@ export async function openDevTools(): Promise<void> {
     console.log('openDevTools not supported on this platform')
   }
 }
+
+// 剪切板监听翻译设置
+export async function updateClipboardMonitor(
+  enabled: boolean,
+  intervalMs: number
+): Promise<void> {
+  try {
+    await invoke('update_clipboard_monitor', { enabled, intervalMs })
+  } catch (error) {
+    console.error('Failed to update clipboard monitor:', error)
+    throw error
+  }
+}
+
+export async function getClipboardMonitorState(): Promise<{ enabled: boolean; intervalMs: number }> {
+  try {
+    return await invoke('get_clipboard_monitor_state')
+  } catch (error) {
+    console.error('Failed to get clipboard monitor state:', error)
+    return { enabled: false, intervalMs: 1000 }
+  }
+}
