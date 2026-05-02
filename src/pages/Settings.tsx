@@ -214,16 +214,19 @@ export function Settings() {
         <h3 className="section-title">剪切板翻译</h3>
         <p className="section-desc">在任意应用中双击 Ctrl+C 触发翻译</p>
 
-        <div className="form-group checkbox-group">
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              name="clipboardTranslationEnabled"
-              checked={formData.clipboardTranslationEnabled}
-              onChange={handleClipboardToggle}
-            />
-            <span className="checkbox-text">启用剪切板翻译</span>
-          </label>
+        <div className="form-group toggle-group">
+          <div className="toggle-switch-wrapper">
+            <span className="toggle-label">启用剪切板翻译</span>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                name="clipboardTranslationEnabled"
+                checked={formData.clipboardTranslationEnabled}
+                onChange={handleClipboardToggle}
+              />
+              <span className="toggle-slider" />
+            </label>
+          </div>
         </div>
 
         <div className={`form-group ${!formData.clipboardTranslationEnabled ? 'disabled' : ''}`}>
@@ -241,10 +244,6 @@ export function Settings() {
             onChange={handleClipboardIntervalChange}
             disabled={!formData.clipboardTranslationEnabled}
           />
-          <div className="range-labels">
-            <span>0.2s</span>
-            <span>3.0s</span>
-          </div>
         </div>
       </div>
 
