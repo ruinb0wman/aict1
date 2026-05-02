@@ -12,8 +12,6 @@ use tauri_plugin_autostart::ManagerExt;
 struct ClipboardMonitorState {
     enabled: bool,
     interval_ms: u64,
-    last_copy_time: Option<Instant>,
-    ctrl_pressed: bool,
 }
 
 impl ClipboardMonitorState {
@@ -21,8 +19,6 @@ impl ClipboardMonitorState {
         Self {
             enabled: false,
             interval_ms: 1000,
-            last_copy_time: None,
-            ctrl_pressed: false,
         }
     }
 }
@@ -404,6 +400,8 @@ fn set_silent_start(app: tauri::AppHandle, enabled: bool) -> Result<(), String> 
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let flag_path = data_dir.join(".silent_start");
     if enabled {
+        // 确保目录存在，再写入标志文件
+        std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
         std::fs::write(&flag_path, "").map_err(|e| e.to_string())?;
     } else {
         let _ = std::fs::remove_file(&flag_path);
