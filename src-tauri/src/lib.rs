@@ -4,6 +4,7 @@ use tauri::{Manager, Emitter};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+use tauri_plugin_autostart::ManagerExt;
 
 // ==================== 剪切板监听状态 ====================
 
@@ -384,6 +385,33 @@ async fn import_data(app: tauri::AppHandle) -> Result<ImportDataResult, String> 
 }
 
 #[tauri::command]
+async fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    if enabled {
+        app.autolaunch().enable().map_err(|e| e.to_string())?;
+    } else {
+        app.autolaunch().disable().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_silent_start(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let flag_path = data_dir.join(".silent_start");
+    if enabled {
+        std::fs::write(&flag_path, "").map_err(|e| e.to_string())?;
+    } else {
+        let _ = std::fs::remove_file(&flag_path);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn open_devtools(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
         window.open_devtools();
@@ -466,7 +494,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_clipboard_manager::init());
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ));
 
     // 单例模式插件：只在桌面端启用
     #[cfg(desktop)]
@@ -486,6 +518,9 @@ pub fn run() {
             quit_app,
             update_clipboard_monitor,
             get_clipboard_monitor_state,
+            get_autostart,
+            set_autostart,
+            set_silent_start,
         ])
         .setup(move |app| {
             #[cfg(desktop)]
@@ -541,6 +576,19 @@ pub fn run() {
                     .build(app)?;
 
                 app.manage(tray);
+
+                // 静默启动检测：若通过自启启动且开含静默启动标志，则隐藏主窗口
+                let args: Vec<String> = std::env::args().collect();
+                let is_autostart = args.contains(&"--autostart".to_string());
+                if is_autostart {
+                    if let Ok(data_dir) = app.path().app_data_dir() {
+                        if data_dir.join(".silent_start").exists() {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.hide();
+                            }
+                        }
+                    }
+                }
 
                 // 启动全局键盘监听线程
                 let app_handle = app.app_handle().clone();

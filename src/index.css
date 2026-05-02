@@ -2202,6 +2202,18 @@ body {
   letter-spacing: 0.5px;
 }
 
+.settings-section .section-desc {
+  font-size: 11px;
+  color: #71717a;
+  margin-bottom: var(--spacing-md);
+}
+
+.toggle-desc {
+  font-size: 11px;
+  color: #71717a;
+  margin-top: var(--spacing-xs);
+}
+
 .data-management-grid {
   display: flex;
   flex-direction: column;

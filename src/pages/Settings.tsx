@@ -12,6 +12,8 @@ export function Settings() {
     historyLimit: settings.historyLimit,
     clipboardTranslationEnabled: settings.clipboardTranslationEnabled,
     clipboardTranslationInterval: settings.clipboardTranslationInterval,
+    autoStart: settings.autoStart,
+    silentStart: settings.silentStart,
   })
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -34,6 +36,8 @@ export function Settings() {
       historyLimit: settings.historyLimit,
       clipboardTranslationEnabled: settings.clipboardTranslationEnabled,
       clipboardTranslationInterval: settings.clipboardTranslationInterval,
+      autoStart: settings.autoStart,
+      silentStart: settings.silentStart,
     })
   }, [
     settings.apiBaseUrl,
@@ -43,6 +47,8 @@ export function Settings() {
     settings.historyLimit,
     settings.clipboardTranslationEnabled,
     settings.clipboardTranslationInterval,
+    settings.autoStart,
+    settings.silentStart,
   ])
 
   const handleChange = (
@@ -71,6 +77,18 @@ export function Settings() {
     if (formData.clipboardTranslationEnabled) {
       await settings.updateClipboardMonitorSettings(true, interval)
     }
+  }
+
+  const handleAutoStartToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = e.target.checked
+    setFormData((prev) => ({ ...prev, autoStart: enabled }))
+    await settings.setAutoStart(enabled)
+  }
+
+  const handleSilentStartToggle = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const enabled = e.target.checked
+    setFormData((prev) => ({ ...prev, silentStart: enabled }))
+    await settings.setSilentStart(enabled)
   }
 
   const handleSave = async () => {
@@ -244,6 +262,41 @@ export function Settings() {
             onChange={handleClipboardIntervalChange}
             disabled={!formData.clipboardTranslationEnabled}
           />
+        </div>
+      </div>
+
+      <div className="settings-section system-section">
+        <h3 className="section-title">系统设置</h3>
+
+        <div className="form-group toggle-group">
+          <div className="toggle-switch-wrapper">
+            <span className="toggle-label">开机自启</span>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={formData.autoStart}
+                onChange={handleAutoStartToggle}
+              />
+              <span className="toggle-slider" />
+            </label>
+          </div>
+          <p className="toggle-desc">系统启动时自动运行应用</p>
+        </div>
+
+        <div className={`form-group toggle-group ${!formData.autoStart ? 'disabled' : ''}`}>
+          <div className="toggle-switch-wrapper">
+            <span className="toggle-label">静默启动</span>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={formData.silentStart}
+                onChange={handleSilentStartToggle}
+                disabled={!formData.autoStart}
+              />
+              <span className="toggle-slider" />
+            </label>
+          </div>
+          <p className="toggle-desc">开机启动时不显示主窗口，仅在托盘运行</p>
         </div>
       </div>
 

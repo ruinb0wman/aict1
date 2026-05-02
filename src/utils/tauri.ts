@@ -188,3 +188,32 @@ export async function getClipboardMonitorState(): Promise<{ enabled: boolean; in
     return { enabled: false, intervalMs: 1000 }
   }
 }
+
+// 开机自启设置
+export async function getAutoStart(): Promise<boolean> {
+  try {
+    return await invoke<boolean>('get_autostart')
+  } catch (error) {
+    console.error('Failed to get autostart state:', error)
+    return false
+  }
+}
+
+export async function setAutoStart(enabled: boolean): Promise<void> {
+  try {
+    await invoke('set_autostart', { enabled })
+  } catch (error) {
+    console.error('Failed to set autostart:', error)
+    throw error
+  }
+}
+
+// 静默启动设置
+export async function setSilentStart(enabled: boolean): Promise<void> {
+  try {
+    await invoke('set_silent_start', { enabled })
+  } catch (error) {
+    console.error('Failed to set silent start:', error)
+    throw error
+  }
+}

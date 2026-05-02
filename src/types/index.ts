@@ -63,6 +63,8 @@ export type Settings = {
   historyLimit: number;
   clipboardTranslationEnabled: boolean;
   clipboardTranslationInterval: number;
+  autoStart: boolean;
+  silentStart: boolean;
 };
 
 export const defaultSettings: Settings = {
@@ -73,6 +75,8 @@ export const defaultSettings: Settings = {
   historyLimit: 100,
   clipboardTranslationEnabled: false,
   clipboardTranslationInterval: 1000,
+  autoStart: false,
+  silentStart: false,
 };
 
 // ==================== Toast 类型 ====================

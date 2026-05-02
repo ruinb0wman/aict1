@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { Settings, defaultSettings } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { indexedDBService } from '@/utils/indexedDB'
-import { exportData, importData, updateClipboardMonitor } from '@/utils/tauri'
+import { exportData, importData, updateClipboardMonitor, setAutoStart, setSilentStart } from '@/utils/tauri'
 import { useFavoritesStore } from './favoritesStore'
 
 interface SettingsState extends Settings {
@@ -14,6 +14,8 @@ interface SettingsState extends Settings {
   importAllData: () => Promise<boolean>
   initClipboardMonitor: () => Promise<void>
   updateClipboardMonitorSettings: (enabled: boolean, interval: number) => Promise<void>
+  setAutoStart: (enabled: boolean) => Promise<void>
+  setSilentStart: (enabled: boolean) => Promise<void>
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -35,6 +37,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
           historyLimit: savedSettings.historyLimit || defaultSettings.historyLimit,
           clipboardTranslationEnabled: savedSettings.clipboardTranslationEnabled ?? defaultSettings.clipboardTranslationEnabled,
           clipboardTranslationInterval: savedSettings.clipboardTranslationInterval ?? defaultSettings.clipboardTranslationInterval,
+          autoStart: savedSettings.autoStart ?? defaultSettings.autoStart,
+          silentStart: savedSettings.silentStart ?? defaultSettings.silentStart,
           isLoading: false,
         })
       } else {
@@ -62,6 +66,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         historyLimit: newSettings.historyLimit ?? current.historyLimit,
         clipboardTranslationEnabled: newSettings.clipboardTranslationEnabled ?? current.clipboardTranslationEnabled,
         clipboardTranslationInterval: newSettings.clipboardTranslationInterval ?? current.clipboardTranslationInterval,
+        autoStart: newSettings.autoStart ?? current.autoStart,
+        silentStart: newSettings.silentStart ?? current.silentStart,
       }
       await indexedDBService.saveSettings(merged)
       set({ ...merged, isLoading: false })
@@ -139,6 +145,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         historyLimit: current.historyLimit,
         clipboardTranslationEnabled: current.clipboardTranslationEnabled,
         clipboardTranslationInterval: current.clipboardTranslationInterval,
+        autoStart: current.autoStart,
+        silentStart: current.silentStart,
       }
 
       // 获取收藏数据
@@ -240,6 +248,46 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       console.error('Failed to update clipboard monitor:', error)
       setTimeout(() => {
         useAppStore.getState().showToast('剪切板监听设置失败', 'error')
+      }, 0)
+    }
+  },
+
+  // 设置开机自启
+  setAutoStart: async (enabled) => {
+    try {
+      await setAutoStart(enabled)
+      set({ autoStart: enabled })
+      await get().saveSettings({ autoStart: enabled })
+      setTimeout(() => {
+        useAppStore.getState().showToast(
+          enabled ? '已开启开机自启' : '已关闭开机自启',
+          'success'
+        )
+      }, 0)
+    } catch (error) {
+      console.error('Failed to set autostart:', error)
+      setTimeout(() => {
+        useAppStore.getState().showToast('自启设置失败', 'error')
+      }, 0)
+    }
+  },
+
+  // 设置静默启动
+  setSilentStart: async (enabled) => {
+    try {
+      await setSilentStart(enabled)
+      set({ silentStart: enabled })
+      await get().saveSettings({ silentStart: enabled })
+      setTimeout(() => {
+        useAppStore.getState().showToast(
+          enabled ? '已开启静默启动' : '已关闭静默启动',
+          'success'
+        )
+      }, 0)
+    } catch (error) {
+      console.error('Failed to set silent start:', error)
+      setTimeout(() => {
+        useAppStore.getState().showToast('静默启动设置失败', 'error')
       }, 0)
     }
   },
