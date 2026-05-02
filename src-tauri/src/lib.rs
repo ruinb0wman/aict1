@@ -271,7 +271,7 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
-                use tauri::tray::{TrayIconBuilder, TrayIconEvent};
+                use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
                 use tauri::menu::{Menu, MenuItem};
                 
                 // 创建托盘菜单
@@ -288,6 +288,7 @@ pub fn run() {
                     .icon(tray_icon)
                     .tooltip("AI Dictionary")
                     .menu(&menu)
+                    .show_menu_on_left_click(false)
                     .on_menu_event(|app, event| {
                         match event.id.as_ref() {
                             "show" => {
@@ -303,19 +304,20 @@ pub fn run() {
                         }
                     })
                     .on_tray_icon_event(|tray, event| {
-                        match event {
-                            TrayIconEvent::Click { .. } => {
-                                // 左键单击切换显示/隐藏
+                        if let TrayIconEvent::Click { button, button_state, .. } = event {
+                            // 只处理左键释放事件，避免 Down/Up 重复触发
+                            if button == MouseButton::Left && button_state == MouseButtonState::Up {
                                 if let Some(window) = tray.app_handle().get_webview_window("main") {
-                                    if window.is_visible().unwrap_or(true) {
-                                        let _ = window.hide();
-                                    } else {
-                                        let _ = window.show();
-                                        let _ = window.set_focus();
+                                    if let Ok(visible) = window.is_visible() {
+                                        if visible {
+                                            let _ = window.hide();
+                                        } else {
+                                            let _ = window.show();
+                                            let _ = window.set_focus();
+                                        }
                                     }
                                 }
                             }
-                            _ => {}
                         }
                     })
                     .build(app)?;
