@@ -223,3 +223,10 @@ src-tauri/          # Rust backend (Tauri)
 - System tray integration
 - Clipboard monitoring for auto-translate
 - Supports Chinese ↔ English translation
+
+## Code Sync Rule
+
+- **Always modify code in WSL only** (`~/Workspace/aict1`)
+- **Never modify Windows files** under `/mnt/d/Workspace/aict1/`
+- The user syncs code from WSL to Windows using `wsync`
+- If you need to check something on Windows, read only — do not write
