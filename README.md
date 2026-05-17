@@ -42,6 +42,21 @@
 - **图标**：Lucide 线性图标，1.5px 细线条
 - **圆角**：小元素 6px，大元素 12px
 
+## 开发环境
+
+### 基础依赖
+
+- **bun** - JavaScript/TypeScript 运行时及包管理器，[安装指南](https://bun.sh/docs/installation)
+- **Rust** - Tauri 后端编译所需，通过 [rustup](https://rustup.rs/) 安装
+
+### Windows 额外依赖
+
+Windows 下编译 Tauri 需要 MSVC 链接器，请安装 [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)：
+
+1. 下载并运行安装程序
+2. 在「工作负载」选项卡中勾选 **「使用 C++ 的桌面开发」**
+3. 安装完成后重启终端即可
+
 ## Licence
 
 本项目采用双重许可模式：
