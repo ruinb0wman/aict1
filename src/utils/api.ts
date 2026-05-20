@@ -1,6 +1,7 @@
+import { fetch } from '@tauri-apps/plugin-http'
 import { Settings, QueryResponse, QueryResult, SentenceTranslation, GrammarCheckResult } from '@/types'
 
-const API_TIMEOUT = 30000 // 30 秒超时
+const API_TIMEOUT = 30000
 
 // 判断输入是单词还是句子
 export function isSentence(input: string): boolean {

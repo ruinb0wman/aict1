@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { Settings, defaultSettings } from '@/types'
 import { useAppStore } from '@/stores/appStore'
 import { indexedDBService } from '@/utils/indexedDB'
+import { testAPIConnection } from '@/utils/api'
 import { exportData, importData, updateClipboardMonitor, setAutoStart, setSilentStart } from '@/utils/tauri'
 import { useFavoritesStore } from './favoritesStore'
 
@@ -85,52 +86,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   // 测试 API 连接
   testConnection: async () => {
-    const { apiBaseUrl, apiKey, model } = get()
-
-    if (!apiKey) {
-      return { success: false, message: '请先输入 API Key' }
-    }
-
-    try {
-      const response = await fetch(`${apiBaseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [{ role: 'user', content: 'Hello' }],
-          max_tokens: 5,
-        }),
-      })
-
-      if (response.ok) {
-        setTimeout(() => {
-          useAppStore.getState().showToast('API 连接测试成功', 'success')
-        }, 0)
-        return { success: true, message: '连接成功！' }
-      } else {
-        const errorData = await response.json().catch(() => ({}))
-        const message = errorData.error?.message || response.statusText
-        setTimeout(() => {
-          useAppStore.getState().showToast(`连接失败: ${message}`, 'error', 5000)
-        }, 0)
-        return {
-          success: false,
-          message: `连接失败: ${message}`
-        }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '未知错误'
-      setTimeout(() => {
-        useAppStore.getState().showToast(`网络错误: ${message}`, 'error', 5000)
-      }, 0)
-      return {
-        success: false,
-        message: `网络错误: ${message}`
-      }
-    }
+    const result = await testAPIConnection(get())
+    setTimeout(() => {
+      useAppStore.getState().showToast(
+        result.success ? 'API 连接测试成功' : `连接失败: ${result.message}`,
+        result.success ? 'success' : 'error',
+        result.success ? undefined : 5000
+      )
+    }, 0)
+    return result
   },
 
   // 导出所有数据（设置 + 收藏）
