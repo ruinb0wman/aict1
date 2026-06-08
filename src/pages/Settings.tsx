@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Loader2, Download, Upload } from 'lucide-react'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { getPlatform } from '@/utils/tauri'
 
 export function Settings() {
   const settings = useSettingsStore()
+  const [platform, setPlatform] = useState<'desktop' | 'mobile'>('desktop')
   const [formData, setFormData] = useState({
     apiBaseUrl: settings.apiBaseUrl,
     apiKey: settings.apiKey,
@@ -24,6 +26,11 @@ export function Settings() {
   useEffect(() => {
     settings.loadSettings()
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 检测平台
+  useEffect(() => {
+    getPlatform().then(setPlatform)
   }, [])
 
   // 同步设置到表单
@@ -265,40 +272,42 @@ export function Settings() {
         </div>
       </div>
 
-      <div className="settings-section system-section">
-        <h3 className="section-title">系统设置</h3>
+      {platform === 'desktop' && (
+        <div className="settings-section system-section">
+          <h3 className="section-title">系统设置</h3>
 
-        <div className="form-group toggle-group">
-          <div className="toggle-switch-wrapper">
-            <span className="toggle-label">开机自启</span>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={formData.autoStart}
-                onChange={handleAutoStartToggle}
-              />
-              <span className="toggle-slider" />
-            </label>
+          <div className="form-group toggle-group">
+            <div className="toggle-switch-wrapper">
+              <span className="toggle-label">开机自启</span>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={formData.autoStart}
+                  onChange={handleAutoStartToggle}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+            <p className="toggle-desc">系统启动时自动运行应用</p>
           </div>
-          <p className="toggle-desc">系统启动时自动运行应用</p>
-        </div>
 
-        <div className={`form-group toggle-group ${!formData.autoStart ? 'disabled' : ''}`}>
-          <div className="toggle-switch-wrapper">
-            <span className="toggle-label">静默启动</span>
-            <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={formData.silentStart}
-                onChange={handleSilentStartToggle}
-                disabled={!formData.autoStart}
-              />
-              <span className="toggle-slider" />
-            </label>
+          <div className={`form-group toggle-group ${!formData.autoStart ? 'disabled' : ''}`}>
+            <div className="toggle-switch-wrapper">
+              <span className="toggle-label">静默启动</span>
+              <label className="toggle-switch">
+                <input
+                  type="checkbox"
+                  checked={formData.silentStart}
+                  onChange={handleSilentStartToggle}
+                  disabled={!formData.autoStart}
+                />
+                <span className="toggle-slider" />
+              </label>
+            </div>
+            <p className="toggle-desc">开机启动时不显示主窗口，仅在托盘运行</p>
           </div>
-          <p className="toggle-desc">开机启动时不显示主窗口，仅在托盘运行</p>
         </div>
-      </div>
+      )}
 
       <div className="settings-section data-management">
         <h3 className="section-title">数据管理</h3>
