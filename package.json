@@ -12,6 +12,7 @@
     "build:pc": "tauri build",
     "build:android": "tauri android build",
     "build:ios": "tauri ios build",
+    "init:android": "tauri android init",
     "preview": "vite preview",
     "tauri": "tauri"
   },

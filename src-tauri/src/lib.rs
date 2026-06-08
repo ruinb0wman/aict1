@@ -4,6 +4,7 @@ use tauri::{Manager, Emitter};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
+#[cfg(desktop)]
 use tauri_plugin_autostart::ManagerExt;
 
 // ==================== 剪切板监听状态 ====================
@@ -380,11 +381,13 @@ async fn import_data(app: tauri::AppHandle) -> Result<ImportDataResult, String> 
     }
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 async fn get_autostart(app: tauri::AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|e| e.to_string())
 }
 
+#[cfg(desktop)]
 #[tauri::command]
 fn set_autostart(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     if enabled {
@@ -493,16 +496,17 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_http::init())
-        .plugin(tauri_plugin_autostart::init(
-            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-            Some(vec!["--autostart"]),
-        ));
+        .plugin(tauri_plugin_http::init());
 
-    // 单例模式插件：只在桌面端启用
+    // 桌面端专属插件
     #[cfg(desktop)]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(handle_single_instance));
+        builder = builder
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                Some(vec!["--autostart"]),
+            ))
+            .plugin(tauri_plugin_single_instance::init(handle_single_instance));
     }
 
     builder
@@ -517,7 +521,9 @@ pub fn run() {
             quit_app,
             update_clipboard_monitor,
             get_clipboard_monitor_state,
+            #[cfg(desktop)]
             get_autostart,
+            #[cfg(desktop)]
             set_autostart,
             set_silent_start,
         ])
