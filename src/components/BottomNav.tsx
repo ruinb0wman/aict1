@@ -1,4 +1,4 @@
-import { Search, Star, History, BookOpen, Settings, CheckCircle } from 'lucide-react'
+import { Search, Star, History, Settings, CheckCircle } from 'lucide-react'
 import { useAppStore } from '@/stores/appStore'
 import type { PageType } from '@/types'
 
@@ -6,7 +6,6 @@ const navItems: { id: PageType; icon: typeof Search; label: string }[] = [
   { id: 'search', icon: Search, label: '查询' },
   { id: 'grammar', icon: CheckCircle, label: '语法' },
   { id: 'favorites', icon: Star, label: '收藏' },
-  { id: 'review', icon: BookOpen, label: '复习' },
   { id: 'history', icon: History, label: '历史' },
   { id: 'settings', icon: Settings, label: '设置' },
 ]

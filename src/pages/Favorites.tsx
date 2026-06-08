@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Star, Trash2, Loader2 } from 'lucide-react'
+import { Search, Star, Trash2, Loader2, BookOpen } from 'lucide-react'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useAppStore } from '@/stores/appStore'
 import type { FavoriteWord } from '@/types'
@@ -54,7 +54,18 @@ export function Favorites() {
 
   return (
     <div className="favorites-page">
-      <h2 className="page-title">收藏</h2>
+      <div className="favorites-header">
+        <h2 className="page-title">收藏</h2>
+        <div className="favorites-actions">
+          <button
+            className="favorites-action-btn"
+            onClick={() => setCurrentPage('review')}
+            title="复习"
+          >
+            <BookOpen size={18} strokeWidth={1.5} />
+          </button>
+        </div>
+      </div>
 
       {/* 搜索框 */}
       <div className="search-box">
