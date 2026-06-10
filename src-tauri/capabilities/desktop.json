@@ -3,7 +3,5 @@
   "description": "Desktop-only capabilities",
   "windows": ["main"],
   "platforms": ["windows", "macOS", "linux"],
-  "permissions": [
-    "autostart:default"
-  ]
+  "permissions": []
 }

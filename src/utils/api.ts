@@ -69,7 +69,10 @@ function buildWordPrompt(word: string): string {
 1. 提供该单词的音标（美式）
 2. 列出所有常见词性及对应的中文翻译
 3. 提供 3 个实用的英文例句，每个例句附带中文翻译
-4. 只返回 JSON 数据，不要其他解释
+4. 如果该单词有变形（如过去式、过去分词等），提供单词的原型（baseForm）
+5. 列出该单词的近义词（synonyms），用英文表示
+6. 列出该单词的反义词（antonyms），用英文表示
+7. 只返回 JSON 数据，不要其他解释
 
 返回格式：
 {
@@ -81,7 +84,10 @@ function buildWordPrompt(word: string): string {
   },
   "example": [
     {"en": "英文例句", "zh": "中文翻译"}
-  ]
+  ],
+  "synonyms": ["近义词1", "近义词2"],
+  "antonyms": ["反义词1", "反义词2"],
+  "baseForm": "单词原型"
 }`
 }
 

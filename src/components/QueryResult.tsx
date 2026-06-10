@@ -15,11 +15,14 @@ function WordResultEdit({
   onCancel 
 }: { 
   wordResult: QueryResultType
-  onSave: (translation: TranslationMap, examples: ExampleSentence[]) => void
+  onSave: (translation: TranslationMap, examples: ExampleSentence[], synonyms: string[], antonyms: string[], baseForm: string) => void
   onCancel: () => void 
 }) {
   const [translation, setTranslation] = useState<TranslationMap>(wordResult.translation)
   const [examples, setExamples] = useState<ExampleSentence[]>(wordResult.example || [])
+  const [synonyms, setSynonyms] = useState<string>(wordResult.synonyms?.join(', ') || '')
+  const [antonyms, setAntonyms] = useState<string>(wordResult.antonyms?.join(', ') || '')
+  const [baseForm, setBaseForm] = useState<string>(wordResult.baseForm || '')
   const [newPos, setNewPos] = useState('')
   const [newTranslation, setNewTranslation] = useState('')
   const [newEn, setNewEn] = useState('')
@@ -54,6 +57,10 @@ function WordResultEdit({
 
   const handleRemoveExample = (index: number) => {
     setExamples(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const parseCommaSeparated = (value: string): string[] => {
+    return value.split(/[,，;；]/).map(s => s.trim()).filter(Boolean)
   }
 
   return (
@@ -118,8 +125,41 @@ function WordResultEdit({
         </div>
       </div>
 
+      <div className="edit-section">
+        <h4 className="edit-section-title">原型</h4>
+        <input
+          type="text"
+          placeholder="单词原型（如: go）"
+          value={baseForm}
+          onChange={(e) => setBaseForm(e.target.value)}
+          className="edit-input"
+        />
+      </div>
+
+      <div className="edit-section">
+        <h4 className="edit-section-title">近义词</h4>
+        <input
+          type="text"
+          placeholder="用逗号分隔多个近义词"
+          value={synonyms}
+          onChange={(e) => setSynonyms(e.target.value)}
+          className="edit-input"
+        />
+      </div>
+
+      <div className="edit-section">
+        <h4 className="edit-section-title">反义词</h4>
+        <input
+          type="text"
+          placeholder="用逗号分隔多个反义词"
+          value={antonyms}
+          onChange={(e) => setAntonyms(e.target.value)}
+          className="edit-input"
+        />
+      </div>
+
       <div className="edit-actions">
-        <button className="edit-save-btn" onClick={() => onSave(translation, examples)}>
+        <button className="edit-save-btn" onClick={() => onSave(translation, examples, parseCommaSeparated(synonyms), parseCommaSeparated(antonyms), baseForm)}>
           <Save size={16} strokeWidth={1.5} />
           保存
         </button>
@@ -213,7 +253,7 @@ function NoteSection({
 export function QueryResultView() {
   const { queryResult, isLoading, error, lastQuery } = useAppStore()
   const { isFavorite, toggleFavorite } = useFavoritesStore()
-  const { cachedWords, updateWordTranslation, updateWordExamples, addNote } = useWordsStore()
+  const { cachedWords, updateWordTranslation, updateWordExamples, updateWordSynonyms, updateWordAntonyms, updateWordBaseForm, addNote } = useWordsStore()
   const [isEditing, setIsEditing] = useState(false)
 
   // 使用 Web Speech API 播放单词发音
@@ -284,15 +324,23 @@ export function QueryResultView() {
     toggleFavorite(wordResult.word, wordResult)
   }
 
-  const handleSaveEdit = async (translation: TranslationMap, examples: ExampleSentence[]) => {
+  const handleSaveEdit = async (translation: TranslationMap, examples: ExampleSentence[], synonyms: string[], antonyms: string[], baseForm: string) => {
     if (cachedWord) {
       await updateWordTranslation(cachedWord.id, translation)
       await updateWordExamples(cachedWord.id, examples)
+      await updateWordSynonyms(cachedWord.id, synonyms)
+      await updateWordAntonyms(cachedWord.id, antonyms)
+      if (baseForm) {
+        await updateWordBaseForm(cachedWord.id, baseForm)
+      }
       // 更新当前显示的查询结果
       useAppStore.getState().setQueryResult({
         ...wordResult,
         translation,
         example: examples,
+        synonyms,
+        antonyms,
+        baseForm: baseForm || undefined,
       })
     }
     setIsEditing(false)
@@ -367,6 +415,38 @@ export function QueryResultView() {
               </div>
             ))}
           </div>
+
+          {/* 单词原型 - 仅当与原词不同时显示，中译英结果不显示 */}
+          {wordResult.baseForm && wordResult.baseForm.toLowerCase() !== wordResult.word.toLowerCase() && !isChineseResult && (
+            <div className="word-baseform">
+              <h4 className="section-title">原型</h4>
+              <span className="baseform-text">{wordResult.baseForm}</span>
+            </div>
+          )}
+
+          {/* 近义词 - 中译英结果不显示 */}
+          {wordResult.synonyms && wordResult.synonyms.length > 0 && !isChineseResult && (
+            <div className="word-synonyms">
+              <h4 className="section-title">近义词</h4>
+              <div className="word-tags">
+                {wordResult.synonyms.map((synonym, index) => (
+                  <span key={index} className="tag">{synonym}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 反义词 - 中译英结果不显示 */}
+          {wordResult.antonyms && wordResult.antonyms.length > 0 && !isChineseResult && (
+            <div className="word-antonyms">
+              <h4 className="section-title">反义词</h4>
+              <div className="word-tags">
+                {wordResult.antonyms.map((antonym, index) => (
+                  <span key={index} className="tag">{antonym}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 中译英结果不显示例句 */}
           {wordResult.example && wordResult.example.length > 0 && !isChineseResult && (

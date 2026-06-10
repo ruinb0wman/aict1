@@ -14,7 +14,10 @@ export type QueryResult = {
   phonetic?: string;
   translation: TranslationMap;
   example: ExampleSentence[];
-  isChinese?: boolean;  // 标记是否为中译英结果
+  synonyms?: string[];      // 近义词
+  antonyms?: string[];      // 反义词
+  baseForm?: string;         // 单词原型（如 went → go）
+  isChinese?: boolean;      // 标记是否为中译英结果
 };
 
 export type SentenceTranslation = {
@@ -98,6 +101,9 @@ export type WordEntry = {
   phonetic?: string;       // 音标
   translation: TranslationMap;  // 翻译（可编辑）
   example: ExampleSentence[];   // 例句（可编辑）
+  synonyms?: string[];     // 近义词
+  antonyms?: string[];     // 反义词
+  baseForm?: string;       // 单词原型
   note?: string;           // 个人批注/备注
   createdAt: number;       // 首次查询时间
   updatedAt: number;       // 最后更新时间

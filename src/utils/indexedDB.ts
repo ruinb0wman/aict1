@@ -10,7 +10,7 @@ interface DictDB extends Dexie {
 }
 
 const DB_NAME = 'DictDB'
-const DB_VERSION = 3  // 升级数据库版本以添加 history 和 settings 表
+const DB_VERSION = 4  // 升级数据库版本以添加 synonyms, antonyms, baseForm 字段
 
 export class IndexedDBService {
   private db: DictDB
@@ -44,6 +44,9 @@ export class IndexedDBService {
           phonetic: queryResult.phonetic || existingWord.phonetic,
           translation: queryResult.translation,
           example: queryResult.example,
+          synonyms: queryResult.synonyms || existingWord.synonyms,
+          antonyms: queryResult.antonyms || existingWord.antonyms,
+          baseForm: queryResult.baseForm || existingWord.baseForm,
           updatedAt: now,
           queryCount: existingWord.queryCount + 1,
         }
@@ -53,6 +56,9 @@ export class IndexedDBService {
           phonetic: queryResult.phonetic,
           translation: queryResult.translation,
           example: queryResult.example,
+          synonyms: queryResult.synonyms,
+          antonyms: queryResult.antonyms,
+          baseForm: queryResult.baseForm,
           createdAt: now,
           updatedAt: now,
           queryCount: 1,
@@ -118,6 +124,9 @@ export class IndexedDBService {
       phonetic: wordEntry.phonetic,
       translation: wordEntry.translation,
       example: wordEntry.example,
+      synonyms: wordEntry.synonyms,
+      antonyms: wordEntry.antonyms,
+      baseForm: wordEntry.baseForm,
     }
   }
 
