@@ -34,3 +34,6 @@ src-tauri/gen
 # OS
 .DS_Store
 Thumbs.db
+.codegraph/
+scripts/output/
+scripts/output1/
