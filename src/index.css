@@ -17,11 +17,23 @@ body {
   overflow: hidden;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 /* ==================== 应用布局 ==================== */
 .app {
   display: flex;
   flex-direction: column;
+  /* 移动端浏览器里 100vh 是「大视口」（含地址栏），会把底部导航顶到屏幕外；
+     100dvh 跟实际可见高度走。Tauri WebView 里两者相等。 */
   height: 100vh;
+  height: 100dvh;
+  /* 移动端 edge-to-edge：状态栏/手势条是叠加在页面上的（本机 top 实测 52px），
+     不内缩就会把标题栏和底部导航压在系统栏下面。桌面端 env() 为 0。 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--bg-page);
 }
 

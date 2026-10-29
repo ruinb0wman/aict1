@@ -3,5 +3,5 @@
   "description": "Desktop-only capabilities",
   "windows": ["main"],
   "platforms": ["windows", "macOS", "linux"],
-  "permissions": []
+  "permissions": ["global-shortcut:default"]
 }
