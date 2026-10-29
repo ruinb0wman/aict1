@@ -1,284 +1,132 @@
-import { create } from 'zustand'
-import { WordEntry, QueryResult, TranslationMap, ExampleSentence } from '@/types'
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import type { WordEntry, QueryResult, TranslationMap, ExampleSentence } from '@/types'
 import { indexedDBService } from '@/utils/indexedDB'
+import { toPlain } from '@/libs/plain'
 import { useAppStore } from '@/stores/appStore'
 
-interface WordsState {
-  // 缓存的单词列表
-  cachedWords: WordEntry[]
-  // 当前编辑的单词
-  editingWord: WordEntry | null
-  // 是否正在加载
-  isLoading: boolean
-  
-  // 初始化（加载所有缓存的单词）
-  init: () => Promise<void>
-  // 从缓存获取单词
-  getWordFromCache: (word: string) => Promise<WordEntry | null>
-  // 保存单词到缓存
-  saveWordToCache: (word: string, queryResult: QueryResult) => Promise<WordEntry>
-  // 更新单词翻译
-  updateWordTranslation: (wordId: string, translation: TranslationMap) => Promise<void>
-  // 更新单词例句
-  updateWordExamples: (wordId: string, examples: ExampleSentence[]) => Promise<void>
-  // 更新单词近义词
-  updateWordSynonyms: (wordId: string, synonyms: string[]) => Promise<void>
-  // 更新单词反义词
-  updateWordAntonyms: (wordId: string, antonyms: string[]) => Promise<void>
-  // 更新单词原型
-  updateWordBaseForm: (wordId: string, baseForm: string) => Promise<void>
-  // 添加/更新批注
-  addNote: (wordId: string, note: string) => Promise<void>
-  // 删除批注
-  removeNote: (wordId: string) => Promise<void>
-  // 开始编辑单词
-  startEditing: (wordEntry: WordEntry) => void
-  // 取消编辑
-  cancelEditing: () => void
-  // 保存编辑
-  saveEditing: (updates: Partial<WordEntry>) => Promise<void>
-  // 删除单词缓存
-  deleteWord: (wordId: string) => Promise<void>
-  // 检查单词是否在缓存中
-  isWordCached: (word: string) => boolean
-}
+export const useWordsStore = defineStore('words', () => {
+  const cachedWords = ref<WordEntry[]>([])
+  const editingWord = ref<WordEntry | null>(null)
+  const isLoading = ref(false)
 
-export const useWordsStore = create<WordsState>((set, get) => ({
-  cachedWords: [],
-  editingWord: null,
-  isLoading: false,
-
-  // 初始化 - 加载所有缓存的单词
-  init: async () => {
-    set({ isLoading: true })
+  async function init() {
+    isLoading.value = true
     try {
-      const words = await indexedDBService.getAllWords()
-      set({ cachedWords: words, isLoading: false })
+      cachedWords.value = await indexedDBService.getAllWords()
     } catch (error) {
       console.error('Failed to load cached words:', error)
-      set({ isLoading: false })
+    } finally {
+      isLoading.value = false
     }
-  },
+  }
 
-  // 从缓存获取单词
-  getWordFromCache: async (word: string) => {
+  async function getWordFromCache(word: string) {
     try {
-      const wordEntry = await indexedDBService.getWord(word)
-      return wordEntry
+      return await indexedDBService.getWord(word)
     } catch (error) {
       console.error('Failed to get word from cache:', error)
       return null
     }
-  },
+  }
 
-  // 保存单词到缓存
-  saveWordToCache: async (word: string, queryResult: QueryResult) => {
-    try {
-      const wordEntry = await indexedDBService.saveWord(word, queryResult)
-      // 更新本地缓存列表
-      const { cachedWords } = get()
-      const existingIndex = cachedWords.findIndex(w => w.id === wordEntry.id)
-      let newCachedWords: WordEntry[]
-      
-      if (existingIndex >= 0) {
-        // 更新现有单词
-        newCachedWords = [...cachedWords]
-        newCachedWords[existingIndex] = wordEntry
-      } else {
-        // 添加新单词到开头
-        newCachedWords = [wordEntry, ...cachedWords]
-      }
-      
-      set({ cachedWords: newCachedWords })
-      return wordEntry
-    } catch (error) {
-      console.error('Failed to save word to cache:', error)
-      throw error
+  async function saveWordToCache(word: string, queryResult: QueryResult) {
+    const wordEntry = await indexedDBService.saveWord(word, toPlain(queryResult))
+    const index = cachedWords.value.findIndex(w => w.id === wordEntry.id)
+    if (index >= 0) {
+      cachedWords.value[index] = wordEntry
+    } else {
+      cachedWords.value = [wordEntry, ...cachedWords.value]
     }
-  },
+    return wordEntry
+  }
 
-  // 更新单词翻译
-  updateWordTranslation: async (wordId: string, translation: TranslationMap) => {
+  // 所有 updateXxx 都是同一个动作：写库（过 toPlain）→ 替换本地缓存 → 提示
+  async function updateWord(
+    wordId: string,
+    updates: Partial<WordEntry>,
+    message: string,
+    failure: string
+  ) {
     try {
-      const updatedWord = await indexedDBService.updateWord(wordId, { translation })
-      
-      // 更新本地缓存列表
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w => 
-        w.id === wordId ? updatedWord : w
-      )
-      set({ cachedWords: newCachedWords })
-      
-      useAppStore.getState().showToast('翻译已更新', 'success', 2000)
+      const updated = await indexedDBService.updateWord(wordId, toPlain(updates))
+      cachedWords.value = cachedWords.value.map(w => (w.id === wordId ? updated : w))
+      useAppStore().showToast(message, 'success', 2000)
+      return updated
     } catch (error) {
-      console.error('Failed to update word translation:', error)
-      useAppStore.getState().showToast('更新翻译失败', 'error')
+      console.error(failure, error)
+      useAppStore().showToast(failure, 'error')
     }
-  },
+  }
 
-  // 更新单词例句
-  updateWordExamples: async (wordId: string, examples: ExampleSentence[]) => {
-    try {
-      const updatedWord = await indexedDBService.updateWord(wordId, { example: examples })
-      
-      // 更新本地缓存列表
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w => 
-        w.id === wordId ? updatedWord : w
-      )
-      set({ cachedWords: newCachedWords })
-      
-      useAppStore.getState().showToast('例句已更新', 'success', 2000)
-    } catch (error) {
-      console.error('Failed to update word examples:', error)
-      useAppStore.getState().showToast('更新例句失败', 'error')
-    }
-  },
+  const updateWordTranslation = (wordId: string, translation: TranslationMap) =>
+    updateWord(wordId, { translation }, '翻译已更新', '更新翻译失败')
 
-  // 更新单词近义词
-  updateWordSynonyms: async (wordId: string, synonyms: string[]) => {
-    try {
-      const updatedWord = await indexedDBService.updateWord(wordId, { synonyms })
+  const updateWordExamples = (wordId: string, example: ExampleSentence[]) =>
+    updateWord(wordId, { example }, '例句已更新', '更新例句失败')
 
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w =>
-        w.id === wordId ? updatedWord : w
-      )
-      set({ cachedWords: newCachedWords })
+  const updateWordSynonyms = (wordId: string, synonyms: string[]) =>
+    updateWord(wordId, { synonyms }, '近义词已更新', '更新近义词失败')
 
-      useAppStore.getState().showToast('近义词已更新', 'success', 2000)
-    } catch (error) {
-      console.error('Failed to update word synonyms:', error)
-      useAppStore.getState().showToast('更新近义词失败', 'error')
-    }
-  },
+  const updateWordAntonyms = (wordId: string, antonyms: string[]) =>
+    updateWord(wordId, { antonyms }, '反义词已更新', '更新反义词失败')
 
-  // 更新单词反义词
-  updateWordAntonyms: async (wordId: string, antonyms: string[]) => {
-    try {
-      const updatedWord = await indexedDBService.updateWord(wordId, { antonyms })
+  const updateWordBaseForm = (wordId: string, baseForm: string) =>
+    updateWord(wordId, { baseForm }, '原型已更新', '更新原型失败')
 
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w =>
-        w.id === wordId ? updatedWord : w
-      )
-      set({ cachedWords: newCachedWords })
+  const addNote = (wordId: string, note: string) =>
+    updateWord(wordId, { note }, '批注已保存', '保存批注失败')
 
-      useAppStore.getState().showToast('反义词已更新', 'success', 2000)
-    } catch (error) {
-      console.error('Failed to update word antonyms:', error)
-      useAppStore.getState().showToast('更新反义词失败', 'error')
-    }
-  },
+  const removeNote = (wordId: string) =>
+    updateWord(wordId, { note: undefined }, '批注已删除', '删除批注失败')
 
-  // 更新单词原型
-  updateWordBaseForm: async (wordId: string, baseForm: string) => {
-    try {
-      const updatedWord = await indexedDBService.updateWord(wordId, { baseForm })
+  function startEditing(wordEntry: WordEntry) {
+    editingWord.value = wordEntry
+  }
 
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w =>
-        w.id === wordId ? updatedWord : w
-      )
-      set({ cachedWords: newCachedWords })
+  function cancelEditing() {
+    editingWord.value = null
+  }
 
-      useAppStore.getState().showToast('原型已更新', 'success', 2000)
-    } catch (error) {
-      console.error('Failed to update word base form:', error)
-      useAppStore.getState().showToast('更新原型失败', 'error')
-    }
-  },
+  async function saveEditing(updates: Partial<WordEntry>) {
+    if (!editingWord.value) return
+    const updated = await updateWord(editingWord.value.id, updates, '单词已更新', '保存失败')
+    if (updated) editingWord.value = null
+  }
 
-  // 添加/更新批注
-  addNote: async (wordId: string, note: string) => {
-    try {
-      const updatedWord = await indexedDBService.addNote(wordId, note)
-      
-      // 更新本地缓存列表
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w => 
-        w.id === wordId ? updatedWord : w
-      )
-      set({ cachedWords: newCachedWords })
-      
-      useAppStore.getState().showToast('批注已保存', 'success', 2000)
-    } catch (error) {
-      console.error('Failed to add note:', error)
-      useAppStore.getState().showToast('保存批注失败', 'error')
-    }
-  },
-
-  // 删除批注
-  removeNote: async (wordId: string) => {
-    try {
-      const updatedWord = await indexedDBService.removeNote(wordId)
-      
-      // 更新本地缓存列表
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w => 
-        w.id === wordId ? updatedWord : w
-      )
-      set({ cachedWords: newCachedWords })
-      
-      useAppStore.getState().showToast('批注已删除', 'info', 2000)
-    } catch (error) {
-      console.error('Failed to remove note:', error)
-      useAppStore.getState().showToast('删除批注失败', 'error')
-    }
-  },
-
-  // 开始编辑单词
-  startEditing: (wordEntry: WordEntry) => {
-    set({ editingWord: wordEntry })
-  },
-
-  // 取消编辑
-  cancelEditing: () => {
-    set({ editingWord: null })
-  },
-
-  // 保存编辑
-  saveEditing: async (updates: Partial<WordEntry>) => {
-    const { editingWord } = get()
-    if (!editingWord) return
-
-    try {
-      const updatedWord = await indexedDBService.updateWord(editingWord.id, updates)
-      
-      // 更新本地缓存列表
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.map(w => 
-        w.id === editingWord.id ? updatedWord : w
-      )
-      
-      set({ cachedWords: newCachedWords, editingWord: null })
-      useAppStore.getState().showToast('单词已更新', 'success', 2000)
-    } catch (error) {
-      console.error('Failed to save editing:', error)
-      useAppStore.getState().showToast('保存失败', 'error')
-    }
-  },
-
-  // 删除单词缓存
-  deleteWord: async (wordId: string) => {
+  async function deleteWord(wordId: string) {
     try {
       await indexedDBService.deleteWord(wordId)
-      
-      // 更新本地缓存列表
-      const { cachedWords } = get()
-      const newCachedWords = cachedWords.filter(w => w.id !== wordId)
-      set({ cachedWords: newCachedWords })
-      
-      useAppStore.getState().showToast('单词已删除', 'info', 2000)
+      cachedWords.value = cachedWords.value.filter(w => w.id !== wordId)
+      useAppStore().showToast('单词已删除', 'info', 2000)
     } catch (error) {
       console.error('Failed to delete word:', error)
-      useAppStore.getState().showToast('删除失败', 'error')
+      useAppStore().showToast('删除失败', 'error')
     }
-  },
+  }
 
-  // 检查单词是否在缓存中
-  isWordCached: (word: string) => {
-    const { cachedWords } = get()
-    return cachedWords.some(w => w.word.toLowerCase() === word.toLowerCase())
-  },
-}))
+  function isWordCached(word: string) {
+    return cachedWords.value.some(w => w.word.toLowerCase() === word.toLowerCase())
+  }
+
+  return {
+    cachedWords,
+    editingWord,
+    isLoading,
+    init,
+    getWordFromCache,
+    saveWordToCache,
+    updateWordTranslation,
+    updateWordExamples,
+    updateWordSynonyms,
+    updateWordAntonyms,
+    updateWordBaseForm,
+    addNote,
+    removeNote,
+    startEditing,
+    cancelEditing,
+    saveEditing,
+    deleteWord,
+    isWordCached,
+  }
+})

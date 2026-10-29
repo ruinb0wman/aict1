@@ -179,11 +179,14 @@ export class IndexedDBService {
   }
 
   // 保存所有历史记录（清空后重新保存）
+  // clear + bulkPut 必须同一个事务：否则 bulkPut 失败时旧数据已经被清掉了
   async saveHistory(history: HistoryItem[]): Promise<void> {
-    await this.db.history.clear()
-    if (history.length > 0) {
-      await this.db.history.bulkPut(history)
-    }
+    await this.db.transaction('rw', this.db.history, async () => {
+      await this.db.history.clear()
+      if (history.length > 0) {
+        await this.db.history.bulkPut(history)
+      }
+    })
   }
 
   // 删除单条历史记录
