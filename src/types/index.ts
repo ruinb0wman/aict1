@@ -104,7 +104,7 @@ export type WordEntry = {
 
 // ==================== 应用状态类型 ====================
 
-export type PageType = 'search' | 'favorites' | 'history' | 'review' | 'settings' | 'grammar' | 'offline';
+export type PageType = 'search' | 'favorites' | 'history' | 'review' | 'settings' | 'grammar';
 
 // ==================== 语法检查结果类型 ====================
 

@@ -25,12 +25,6 @@ dist-ssr
 
 release
 
-# Tauri
-src-tauri/target
-src-tauri/Cargo.lock
-src-tauri/gen
-!src-tauri/gen/android/app/build.gradle.kts
-
 # OS
 .DS_Store
 Thumbs.db

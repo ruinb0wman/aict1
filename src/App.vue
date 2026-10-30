@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { RouterView, useRouter } from 'vue-router'
+import { RouterView } from 'vue-router'
 import { RConfirmHost, RErrorBoundary } from '@ruinb0w/ui'
 import TitleBar from '@/components/TitleBar.vue'
 import BottomNav from '@/components/BottomNav.vue'
@@ -9,25 +9,16 @@ import { useNetworkToast } from '@/composables/useNetworkToast'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useHistoryStore } from '@/stores/historyStore'
-import { probeServer } from '@/utils/store'
-import { markUnreachable } from '@/libs/serverState'
 
 const settings = useSettingsStore()
 const favorites = useFavoritesStore()
 const history = useHistoryStore()
-const router = useRouter()
 
 useNetworkToast()
 
 onMounted(async () => {
-  // 先确认服务器在，连不上就直接交给错误页，不要连发三次「加载失败」
-  if (!(await probeServer())) {
-    markUnreachable('启动探活失败：连接被拒绝或超时')
-    router.replace({ name: 'offline', query: { from: '/' } })
-    return
-  }
-
-  settings.loadSettings()
+  // 第一条真实请求就是探活：服务没起时只弹一次错，不连发三条「加载失败」
+  if (!(await settings.loadSettings())) return
   favorites.loadFavorites()
   history.loadHistory()
 })

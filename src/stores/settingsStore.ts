@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import type { Settings } from '@/types'
 import { defaultSettings } from '@/types'
 import { store } from '@/utils/store'
-import { isTauri } from '@/libs/env'
 import { testAPIConnection } from '@/utils/api'
 import { useAppStore } from '@/stores/appStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
@@ -26,7 +25,8 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function loadSettings() {
+  /** 返回值当探活用：false = 服务没起（已经弹过一次 toast） */
+  async function loadSettings(): Promise<boolean> {
     isLoading.value = true
     try {
       const saved = await store.getSettings()
@@ -38,9 +38,11 @@ export const useSettingsStore = defineStore('settings', () => {
         temperature.value = saved.temperature ?? defaultSettings.temperature
         historyLimit.value = saved.historyLimit || defaultSettings.historyLimit
       }
+      return true
     } catch (error) {
       console.error('Failed to load settings:', error)
       useAppStore().showToast('加载设置失败', 'error')
+      return false
     } finally {
       isLoading.value = false
     }
@@ -73,19 +75,6 @@ export const useSettingsStore = defineStore('settings', () => {
       result.success ? undefined : 5000
     )
     return result
-  }
-
-  /** 服务器地址变了：把依赖服务端的数据全部重拉 */
-  async function serverChanged() {
-    const { useHistoryStore } = await import('@/stores/historyStore')
-    const { useWordsStore } = await import('@/stores/wordsStore')
-    await Promise.all([
-      loadSettings(),
-      useFavoritesStore().loadFavorites(),
-      useHistoryStore().loadHistory(),
-      useWordsStore().init(),
-    ])
-    useAppStore().showToast('已切换到新服务器', 'success')
   }
 
   /** 服务端导出整份数据，前端触发下载。移动端 WebView 不支持下载，所以按钮在那里隐藏。 */
@@ -123,44 +112,6 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  /** 一次性迁移：旧版数据在客户端 IndexedDB 里，读出来整体 POST 给服务端 */
-  async function importLocalLegacy() {
-    try {
-      const { indexedDBService } = await import('@/utils/indexedDB')
-      const [legacySettings, legacyFavorites, words, history] = await Promise.all([
-        indexedDBService.getSettings(),
-        indexedDBService.getAllFavorites(),
-        indexedDBService.getAllWords(),
-        indexedDBService.getAllHistory(),
-      ])
-
-      const total = legacyFavorites.length + words.length + history.length
-      if (total === 0 && !legacySettings) {
-        useAppStore().showToast('本机没有旧版数据', 'info')
-        return false
-      }
-
-      const { imported, skipped } = await store.importData({
-        settings: legacySettings ?? undefined,
-        favorites: legacyFavorites,
-        words,
-        history,
-      })
-      await loadSettings()
-      await useFavoritesStore().loadFavorites()
-      useAppStore().showToast(
-        `已迁移 ${words.length} 个单词、${imported} 个收藏（跳过 ${skipped} 个重复）、${history.length} 条历史`,
-        'success',
-        5000
-      )
-      return true
-    } catch (error) {
-      console.error('Legacy migration failed:', error)
-      useAppStore().showToast('迁移失败', 'error')
-      return false
-    }
-  }
-
   return {
     apiBaseUrl,
     apiKey,
@@ -173,8 +124,5 @@ export const useSettingsStore = defineStore('settings', () => {
     testConnection,
     exportAllData,
     importAllData,
-    importLocalLegacy,
-    serverChanged,
-    isTauri,
   }
 })

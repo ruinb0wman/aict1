@@ -27,7 +27,7 @@ body {
   display: flex;
   flex-direction: column;
   /* 移动端浏览器里 100vh 是「大视口」（含地址栏），会把底部导航顶到屏幕外；
-     100dvh 跟实际可见高度走。Tauri WebView 里两者相等。 */
+     100dvh 跟实际可见高度走。 */
   height: 100vh;
   height: 100dvh;
   /* 移动端 edge-to-edge：状态栏/手势条是叠加在页面上的（本机 top 实测 52px），
@@ -1305,65 +1305,4 @@ body {
 .data-management-actions {
   display: flex;
   gap: var(--space-2);
-}
-
-
-/* ==================== 离线页（连不上服务器） ==================== */
-
-.offline-page {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-4);
-  height: 100%;
-  padding: var(--space-6) var(--space-4);
-  overflow-y: auto;
-}
-
-.offline-icon {
-  color: var(--color-warning);
-  margin: 0 auto;
-}
-
-.offline-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  text-align: center;
-}
-
-.offline-detail {
-  text-align: center;
-}
-
-.offline-base {
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-  word-break: break-all;
-}
-
-.offline-reason {
-  margin-top: var(--space-1);
-  font-size: 11px;
-  color: var(--text-tertiary);
-  word-break: break-all;
-}
-
-.offline-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding-top: var(--space-3);
-  border-top: 1px solid var(--border-default);
-}
-
-.offline-label {
-  font-size: var(--font-sm);
-  color: var(--text-secondary);
-}
-
-.offline-hint {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  text-align: center;
 }

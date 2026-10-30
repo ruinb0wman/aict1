@@ -1,4 +1,6 @@
-/** 发音：纯 Web Speech API，浏览器与 WebView 都支持，不需要 Tauri。 */
+// TODO(发音): Android WebView 不实现 speechSynthesis，纯 C/S 后手机上唯一的宿主就是它，
+// 需换成服务端 /api/tts（或把按钮置灰）。实测确认前别把这条注释当结论。
+/** 发音：纯 Web Speech API。 */
 export async function speak(text: string): Promise<boolean> {
   if (!('speechSynthesis' in window)) {
     console.error('浏览器不支持 Web Speech API')

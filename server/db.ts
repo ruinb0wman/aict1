@@ -1,4 +1,4 @@
-// 数据层：SQLite 单文件。语义逐条照搬 src/utils/indexedDB.ts，字段不变的存 doc 列。
+// 数据层：SQLite 单文件。语义沿用旧版客户端 IndexedDB 的实现，字段不变的存 doc 列。
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'

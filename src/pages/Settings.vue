@@ -3,21 +3,17 @@ import { onMounted, reactive, ref, watch } from 'vue'
 import { Download, Upload } from '@lucide/vue'
 import { RButton, RFormRow, RInput, RInputNumber } from '@ruinb0w/ui'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { isTauri } from '@/libs/env'
-import { getBase, setBase } from '@/utils/store'
 import type { Settings } from '@/types'
 
 const settings = useSettingsStore()
 
-const isApp = isTauri()          // 现在只有移动端 Tauri
-const isMobile = isApp
-const serverBase = ref(getBase())
+// 手机 WebView 不支持下载，按宽度判断就够
+const isMobile = window.innerWidth < 768
 const fileInput = ref<HTMLInputElement | null>(null)
 const isTesting = ref(false)
 const isSaving = ref(false)
 const isExporting = ref(false)
 const isImporting = ref(false)
-const isMigrating = ref(false)
 
 const form = reactive<Settings>({
   apiBaseUrl: settings.apiBaseUrl,
@@ -85,18 +81,6 @@ async function onFilePicked(event: Event) {
     isImporting.value = false
   }
 }
-
-async function migrateLegacy() {
-  isMigrating.value = true
-  await settings.importLocalLegacy()
-  isMigrating.value = false
-}
-
-function saveServer() {
-  setBase(serverBase.value)
-  serverBase.value = getBase()
-  settings.serverChanged()
-}
 </script>
 
 <template>
@@ -142,19 +126,6 @@ function saveServer() {
       </div>
     </div>
 
-    <div v-if="isApp" class="settings-section">
-      <h3 class="section-title">服务器</h3>
-      <p class="section-desc">数据与 API Key 都在服务端；桌面端默认 127.0.0.1:8471，手机填局域网或 tailscale 地址</p>
-
-      <RFormRow label="服务器地址">
-        <RInput v-model="serverBase" placeholder="http://192.168.1.5:8471" />
-      </RFormRow>
-
-      <div class="form-actions">
-        <RButton type="primary" @click="saveServer">保存并重载</RButton>
-      </div>
-    </div>
-
     <div class="settings-section">
       <h3 class="section-title">数据管理</h3>
 
@@ -174,16 +145,6 @@ function saveServer() {
             <template #icon><Upload :size="14" :stroke-width="1.5" /></template>
             导入
           </RButton>
-        </div>
-      </div>
-
-      <div class="data-management-item">
-        <div class="data-management-info">
-          <h4>从本机旧数据导入</h4>
-          <p>把这个客户端旧版 IndexedDB 里的单词/收藏/历史上传到服务端（一次性）</p>
-        </div>
-        <div class="data-management-actions">
-          <RButton size="small" :loading="isMigrating" @click="migrateLegacy">迁移</RButton>
         </div>
       </div>
     </div>

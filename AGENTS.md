@@ -2,23 +2,30 @@
 
 ## Project Overview
 
-**Type:** Tauri 2 + Vue 3 + TypeScript + Vite 客户端 ＋ Bun 服务端（SQLite）
+**Type:** Vue 3 + TypeScript + Vite 前端 ＋ Bun 服务端（SQLite）；**没有 App 壳**，纯 C/S
 **Package Manager:** Bun
 **UI library:** [`@ruinb0w/ui`](../ui)（`file:../ui`，本地软链，改库即生效）
 **Description:** AI-powered dictionary tool with word lookup, favorites, history, and review features
 
-## 架构：一个本机服务 + 三个客户端
+## 架构：一个服务，三个入口，全部同源
 
 ```
-bow 标签页 / Tauri(Android) ──HTTP──> bun server (8471) ──> data/dict.db
-                                              ├ /api/*
-                                              ├ /* → dist/
-                                              └ /api/query → 上游 LLM（API Key 只在服务端）
+bow 标签页 / 手机浏览器 / bow_mobile 的包装 APK
+            │  同一个 URL
+            ▼
+   bun server ──> data/dict.db
+        ├ /api/*          数据、设置、LLM 代理
+        └ /* → dist/      静态页面（SPA）
 ```
 
-- **端口恒定**：`8471` = bun server（dev 和 prod 都是），`8470` = 只在 dev 存在的 vite，`8472` = HMR（**不能等于 8471**）。
-- **数据只在服务端**：`data/dict.db`（gitignore）。客户端不再碰 IndexedDB；旧数据靠设置页的「迁移」按钮一次性上传。
-- **同源**：web 端一律用相对 `/api`（dev 靠 vite proxy，prod 同源）；Tauri 打包版没有同源，靠打包注入的 `VITE_API_BASE` + `@tauri-apps/plugin-http`（Rust 侧请求，天然不吃 CORS，也不吃 Android 的 cleartext 限制）。所以服务端不需要 CORS 头。
+- **没有 Tauri、没有 APK 构建、没有 `VITE_API_BASE`**。手机上用就是 `bow_mobile` 里一个只做 WebView 的壳
+  APK，指向本服务的地址；改代码只需重启 server，壳不用重打。
+- **端口**：`8470` = prod 的 bun server 独占（`bun run serve`，同时给 dist 和 `/api`），
+  dev 时改由 vite 占 8470、bun server 退到 `8471`（vite `proxy /api` 过去），`8472` = HMR（**不能等于 8471**）。
+- **外网**：tailscale 把 `8470 → 8670` 转发给外网设备（`https://albedo.tail36b860.ts.net:8670` 即本机 8470），
+  所以 prod 必须起在 8470，URL 才不会变。
+- **同源是唯一形态**：请求一律相对路径（`fetch('/api/…')`），没有服务器地址配置、没有跨源、服务端不需要 CORS 头。
+- **数据只在服务端**：`data/dict.db`（gitignore）。客户端零本地状态（连 `localStorage` 都不用了）。
 - **LLM 调用在服务端**（`server/llm.ts`）：prompt、API Key、上游请求都不在客户端。
 
 ## Build & Development Commands
@@ -26,14 +33,13 @@ bow 标签页 / Tauri(Android) ──HTTP──> bun server (8471) ──> data/
 ```bash
 # 开发：一条命令起两个进程（vite 8470 + bun server 8471）
 bun run dev
-bun run dev:android  # Tauri 移动端（devUrl 已指向 8470，需先起 bun run dev）
-bun run serve        # 只起服务端：dist + /api 同源，端口 8471
+bun run serve        # prod：server 独占 8470，dist + /api 同源（先 bun run build）
 
 # 构建
 bun run build        # vue-tsc --noEmit && vite build
 ```
 
-`dev` 与 `serve` **不能同时跑**（都占 8471）。Ctrl-C 没收干净后报 `EADDRINUSE`（8471 是 server、8470/8472 是 vite），
+`dev` 与 `serve` **不能同时跑**（都占 8470）。Ctrl-C 没收干净后报 `EADDRINUSE`（8470 是 vite 或 serve、8471 是 dev 的 server、8472 是 HMR），
 用 `ss -ltnp | grep -E ':847[0-2]'` 找到 pid 再 `kill`；两个子进程要分别收尸，杀父进程不会带走子进程。
 
 ## Testing Commands
@@ -59,7 +65,7 @@ import '@ruinb0w/ui/style.css'   // 入口引入一次（src/main.ts）
 ```
 
 - 主题：`document.documentElement.dataset.theme = 'exp1-dark'`（深色单主题，色值与本项目一致）
-- 密度：桌面浏览器 `default`（36px 控件），移动端 `touch`（44px），见 `src/main.ts`（Tauri 客户端只剩移动端）
+- 密度：桌面浏览器 `default`（36px 控件），移动端 `touch`（44px），见 `src/main.ts`（按窗口宽度判断，不认宿主）
 - 图标：`@lucide/vue`（**不是** lucide-react / lucide-vue-next）。按名字传给组件的图标要先
   `registerIcons({ ... })` 登记（`src/main.ts` 里），否则只显示名字
 - **不引入 Tailwind**（本项目的 Tailwind 已删除，它从未真正生效过）；样式只读 token：
@@ -92,7 +98,7 @@ import '@ruinb0w/ui/style.css'   // 入口引入一次（src/main.ts）
 ### Imports Order
 
 1. Vue / vue-router / pinia
-2. 第三方库（`@ruinb0w/ui`, `@lucide/vue`, `dexie`…）
+2. 第三方库（`@ruinb0w/ui`, `@lucide/vue`…）
 3. 内部组件（`@/components/*`）
 4. composables（`@/composables/*`）
 5. stores（`@/stores/*`）
@@ -155,8 +161,8 @@ export const useFavoritesStore = defineStore('favorites', () => {
 
 ### `toPlain()`：HTTP 之后已非必须
 
-现在写库是 `JSON.stringify` + HTTP，Vue 的 Proxy 能正常序列化，所以 `toPlain()` 不再是硬要求，代码里留着只是习惯。
-**但如果哪天又出现直接进 structured-clone 的路径（迁移代码里就有），Proxy 会抛 `DataCloneError`，类型检查和单测都抓不到。**
+现在写库是 `JSON.stringify` + HTTP，Vue 的 Proxy 能正常序列化，所以 `toPlain()` 不是硬要求，留着是习惯。
+**但如果哪天又出现直接进 structured-clone 的路径，Proxy 会抛 `DataCloneError`，类型检查和单测都抓不到。**
 
 ### 错误与提示
 
@@ -166,7 +172,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
 
 ### 路由
 
-`vue-router` + `createWebHashHistory`（Tauri WebView 没有服务端路由，hash 免刷新 404）。
+`vue-router` + `createWebHashHistory`（没有服务端历史路由，hash 模式随便刷新都不会 404）。
 页面切换动画用 `<Transition name="page" mode="out-in">`（类名定义在 `src/index.css`）。
 
 ### Types
@@ -192,41 +198,37 @@ server/           # Bun 服务端（bun:sqlite + Bun.serve，无框架依赖）
 src/
 ├─ components/     # 通用组件（TitleBar / BottomNav / Toast / SearchBox / QueryResult…）
 ├─ composables/    # 组合式函数
-├─ libs/           # 框架无关的纯逻辑（含测试）：history / review / text / env / plain
+├─ libs/           # 框架无关的纯逻辑（含测试）：history / review / text / plain
 ├─ pages/          # 路由页面
 ├─ router/         # 路由表
 ├─ stores/         # Pinia stores
 ├─ types/          # 类型
-├─ utils/          # store.ts(HTTP 数据层 + 服务器地址) api.ts(LLM 入口) indexedDB.ts(仅迁移用)
+├─ utils/          # store.ts(HTTP 数据层，一律同步相对路径) api.ts(LLM 入口)
 ├─ App.vue         # 根组件（外壳 + 全局宿主）
 ├─ main.ts         # 入口（pinia / router / 主题 / 图标登记）
 └─ index.css       # 全局样式
 
 data/dict.db       # SQLite（gitignore，备份就是复制它）
-src-tauri/         # Tauri 客户端外壳（只剩 http 插件，无自定义命令）
 ```
 
 ## Key Dependencies
 
-- **@tauri-apps/api** - Tauri JavaScript API
 - **@ruinb0w/ui** - 跨项目 Vue 组件库（本地软链）
 - **@lucide/vue** - 图标（库的 peerDependency）
 - **pinia** - 状态管理
 - **vue-router** - 路由（hash 模式）
-- **dexie** - 只在「从旧版 IndexedDB 迁移」这一条路径上用到（`src/utils/indexedDB.ts`，动态 import，不进主包）；不要再用它写业务数据
 - **uuid** - UUID 生成
 
 ## Development Notes
 
-- 窗口尺寸：400x600（无边框）；Android/iOS 构建共用同一前端
-- 数据：**服务端** `data/dict.db`（SQLite，`words / favorites / history / settings` 四表，JSON 型字段存 doc 列）。客户端没有持久数据，只有 `localStorage['apiBase']` 一个键（服务器地址，仅 Tauri 需要）
+- 数据：**服务端** `data/dict.db`（SQLite，`words / favorites / history / settings` 四表，JSON 型字段存 doc 列）。客户端**零本地持久化**（连 `localStorage` 都不用）
 - 支持中英互译；英译中单词进服务端缓存，中译英结果和句子不缓存
-- **桌面端已整体移除**（2026-10-30）：托盘、双击 Ctrl+C 剪贴板翻译、自启、静默启动、单实例、窗口控制、原生文件对话框连同对应插件/命令/权限一起删掉，`lib.rs` 只剩 plugin-http。需要区分环境时用 `isTauri()`（`src/libs/env.ts`）
-- 连不上服务器时，`router` 守卫会把所有页面交给 `src/pages/Offline.vue`：显示当前地址与原因，可改地址重试，并每 5s 自动探活，恢复后回原页面
+- 启动时用 `settings.loadSettings()` 当探活：失败只弹一次 toast 并跳过 favorites/history 的加载，**没有**整页接管的离线页（服务停了页面本身就打不开）
+- 发音走 Web Speech API：Android WebView 不实现 `speechSynthesis`，手机上点了没反应，待换服务端 TTS 或置灰（见 `src/libs/speech.ts` 顶部 TODO）
 
 ## 运行环境（只有 WSL）
 
 - **只在 WSL 里改代码、跑 dev、构建**（`~/Workspace/aict1`）。
 - **Windows 侧（`C:\Workspace\aict1`）已废弃**：不再用 wsync 同步，也不在那边验证。不要重建 `.wsync.config.js` / `.sync.config.json`。
-- 使用面只有两个：**bow 里的网页** 与 **Android 移动端**。
-- Android 构建也只在 WSL：需要 `/opt/android-sdk/ndk/27.3.13750724` 与 `JAVA_HOME=/usr/lib/jvm/java-17-openjdk`；给 Windows 宿主的 `api35` AVD 出包用 `--target x86_64`。`dev:android` 里的 `--host` 必须等于本机 LAN IP（现在 `192.168.1.2`，换网络要改），否则手机会连不到 dev server。
+- 使用面：**bow 里的网页标签**、**手机浏览器**、**bow_mobile 打的壳 APK**（三者同一个 URL）。
+- 本项目不再需要 Rust / NDK / JDK —— Android 出包在 `bow_mobile` 里做，那边才有工具链。
