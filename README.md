@@ -1,24 +1,29 @@
 # dict - AI 词典工具
 
-一个 AI 驱动的词典桌面应用，将单词发送给配置好的大模型 API，按固定格式返回内容并渲染展示。
+一个 AI 驱动的词典工具：输入单词或句子，由配置好的大模型按固定格式返回内容并渲染。
+
+架构是「一个本机服务 + 三个客户端」——数据与 API Key 都在本机服务上，浏览器（bow）、Tauri 桌面、Tauri 手机共用同一份数据。
+
+```
+bow 标签页 / Tauri 桌面 / Tauri 手机 ──HTTP──> bun server (8471) ──> data/dict.db
+                                              ├ /api/*      数据、设置、LLM 代理
+                                              ├ /*          dist/ 静态页面
+                                              └ /api/query  → 上游大模型（key 只在服务端）
+```
 
 ## 功能特性
 
-- 🔍 **单词查询** - 查询词性、翻译、例句和音标
-- 🔊 **单词发音** - 点击喇叭图标播放发音（Google Translate TTS）
-- 📝 **语句翻译** - 支持整句翻译，自动识别单词/句子
-- ⭐ **收藏单词** - 支持搜索、导入导出（JSON 格式）
-- 📚 **复习单词** - 卡片式翻转复习，「认识/不认识」评分
-- 📝 **查询历史** - 自动保存，支持重新查看、单条删除和清空
-- ✏️ **单词编辑** - 自定义翻译、例句，添加个人批注
-- 📋 **自动读取剪切板** - 自动检测英文内容并翻译
-- ⚙️ **自定义配置** - 支持大模型 API（OpenAI 通用格式）
-- 💾 **本地缓存** - IndexedDB (Dexie.js) 缓存，重复查询免 API 调用
-- 🖥️ **系统托盘** - 托盘常驻，关闭窗口隐藏而非退出
-
-### todo
-
- - [ ] 增加近义词和反义词
+- 🔍 **单词查询** - 音标、词性、翻译、近义词/反义词、单词原型
+- 🔊 **单词发音** - Web Speech API
+- 📝 **语句翻译** - 自动识别单词 / 句子，支持中英互译
+- ⭐ **收藏单词** - 搜索、复习评分、导出导入（JSON）
+- 📚 **复习单词** - 卡片式翻转复习，「认识/不认识」调整掌握度
+- 📝 **查询历史** - 自动保存，支持查看、单条删除、清空
+- ✏️ **单词编辑** - 自定义翻译、例句、近反义词，添加个人批注
+- 🧐 **语法检查** - 给出修正文本、逐条修改原因与整体评价
+- 📋 **剪切板翻译** - 双击 Ctrl+C 触发（仅 Tauri 桌面端）
+- 💾 **服务端缓存** - 查过的单词进 SQLite，重复查询免 API 调用，三端共享
+- 🖥️ **系统托盘** - 托盘常驻，关闭窗口隐藏而非退出（仅桌面端）
 
 ## Preview
 
@@ -28,38 +33,68 @@
 
 ## 技术栈
 
-- **框架**：Tauri v2 + React 19 + Vite
-- **数据库**：dexie.js (IndexedDB)
-- **状态管理**：Zustand
-- **样式**：Tailwind CSS v4
-- **语言**：TypeScript
-- **图标**：lucide-react
-- **包管理器**：bun
+**客户端**
 
-### 视觉风格
+- Tauri v2 + Vue 3 + Vite + TypeScript
+- 状态管理 Pinia、路由 vue-router（hash 模式）
+- UI 组件库 [`@ruinb0w/ui`](../ui)（token 化的深色单主题，不引 Tailwind）
+- 图标 `@lucide/vue`
 
-- **整体风格**：极简主义，深色主题
-- **主色调**：红色 `#f56565`（强调）
-- **背景色**：深灰 `#1b1b1f`（主背景）、浅灰 `#202127`（卡片背景）
-- **文字色**：白色 `#ffffff`（主要）、灰色 `#a0a0a0`（次要）
-- **字体**：系统默认字体栈
-- **图标**：Lucide 线性图标，1.5px 细线条
-- **圆角**：小元素 6px，大元素 12px
+**服务端**
 
-## 开发环境
+- Bun 原生（`Bun.serve` + `bun:sqlite`），零框架依赖
+- 数据库：SQLite 单文件 `data/dict.db`
+- 不引入 ORM：JSON 型字段存 `doc` 列，用 `json_extract` 查询
 
-### 基础依赖
+## 快速开始
 
-- **bun** - JavaScript/TypeScript 运行时及包管理器，[安装指南](https://bun.sh/docs/installation)
-- **Rust** - Tauri 后端编译所需，通过 [rustup](https://rustup.rs/) 安装
+前置：**bun**（[安装](https://bun.sh/docs/installation)）、**Rust**（[rustup](https://rustup.rs/)，只在跑 Tauri 客户端时需要）。
 
-### Windows 额外依赖
+```bash
+bun install
+bun run dev        # 一条命令起两个进程：vite(8470) + bun server(8471)
+```
 
-Windows 下编译 Tauri 需要 MSVC 链接器，请安装 [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)：
+浏览器打开 **http://127.0.0.1:8470** 即可使用；进「设置」填大模型 API 地址 / Key / 模型后开始查询。
 
-1. 下载并运行安装程序
-2. 在「工作负载」选项卡中勾选 **「使用 C++ 的桌面开发」**
-3. 安装完成后重启终端即可
+- dev 和 prod 的**服务端端口都是 8471**，开发时由 vite 把 `/api` 代理过去，所以页面永远同源。
+- 数据在 `data/dict.db`（已 gitignore）——备份就是复制这个文件。
+- 从旧版（纯客户端 IndexedDB）升上来时，在 **Tauri 桌面端** 的设置 → 数据管理 → 「迁移」一次性上传旧数据。
+
+## 命令
+
+```bash
+bun run dev          # vite 8470 + server 8471（HMR 走 8472）
+bun run serve        # 只起服务端：dist + /api 同源，端口 8471
+bun run dev:pc       # Tauri 桌面（devUrl 指 8470，需先跑 bun run dev）
+bun run dev:android  # 同上
+
+bun run build        # vue-tsc --noEmit && vite build
+bun run build:pc     # 打包 Tauri 桌面（自动注入 VITE_API_BASE=http://127.0.0.1:8471）
+
+bun run test         # vitest（前端）+ bun test server（服务端）
+bun run typecheck    # vue-tsc --noEmit
+```
+
+`dev` 与 `serve` 不能同时跑（都占 8471）。
+
+## 手机上用
+
+服务端在局域网里被手机访问时加 `--bind 0.0.0.0`，然后在设置里填 `http://<本机 LAN IP>:8471`；出门走 tailscale 更省事：
+
+```bash
+tailscale serve --bg --https=8471 http://127.0.0.1:8471   # → https://<机器名>.<tailnet>.ts.net:8471
+```
+
+打包好的移动端 APK/iOS 是另一份 build（`VITE_API_BASE` 被写死），换网络时改设置里的服务器地址即可。
+
+## 视觉风格
+
+样式全部读 `@ruinb0w/ui` 的 token（`--bg-*` `--text-*` `--border-*` `--color-*` `--space-*` `--radius-*`），主题是唯一的深色 `exp1-dark`，项目里**不写十六进制色值、不引 Tailwind**。图标统一 Lucide 线性 1.5px。
+
+## 开发环境补充
+
+Windows 下编译 Tauri 需要 MSVC 链接器，请安装 [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)：「工作负载」里勾 **「使用 C++ 的桌面开发」**，装完重启终端。代码只在 WSL 里改，用 `wsync` 同步到 Windows 侧。
 
 ## Licence
 

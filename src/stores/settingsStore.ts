@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Settings } from '@/types'
 import { defaultSettings } from '@/types'
-import { indexedDBService } from '@/utils/indexedDB'
+import { store } from '@/utils/store'
+import { isTauri } from '@/libs/env'
 import { testAPIConnection } from '@/utils/api'
 import { exportData, importData, updateClipboardMonitor, setAutoStart, setSilentStart } from '@/utils/tauri'
 import { useAppStore } from '@/stores/appStore'
@@ -37,7 +38,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function loadSettings() {
     isLoading.value = true
     try {
-      const saved = await indexedDBService.getSettings()
+      const saved = await store.getSettings()
       if (saved) {
         // 逐项回退到默认值：库里可能缺字段（旧版本导出）
         apiBaseUrl.value = saved.apiBaseUrl || defaultSettings.apiBaseUrl
@@ -62,7 +63,7 @@ export const useSettingsStore = defineStore('settings', () => {
     isLoading.value = true
     try {
       const merged: Settings = { ...snapshot(), ...newSettings }
-      await indexedDBService.saveSettings(merged)
+      await store.saveSettings(merged)
       apiBaseUrl.value = merged.apiBaseUrl
       apiKey.value = merged.apiKey
       model.value = merged.model
@@ -93,6 +94,19 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function exportAllData() {
     try {
+      // 浏览器里没有原生文件对话框：直接下载服务端导出的文件
+      if (!isTauri()) {
+        const raw = await store.exportRaw()
+        const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }))
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `aict1-${new Date().toISOString().slice(0, 10)}.json`
+        link.click()
+        URL.revokeObjectURL(url)
+        useAppStore().showToast('数据已导出', 'success')
+        return
+      }
+
       const result = await exportData(snapshot(), useFavoritesStore().favorites)
       if (result.cancelled) return
 
@@ -107,32 +121,29 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function importAllData() {
+  // payload 由 Settings.vue 在网页端读文件后传入；Tauri 里仍走原生对话框
+  async function importAllData(payload?: unknown) {
     try {
-      const result = await importData()
-      if (result.cancelled) return false
+      let data = payload
 
-      if (!result.success) {
-        useAppStore().showToast(result.error || '导入失败', 'error')
-        return false
+      if (data === undefined) {
+        if (!isTauri()) return false
+        const result = await importData()
+        if (result.cancelled) return false
+        if (!result.success) {
+          useAppStore().showToast(result.error || '导入失败', 'error')
+          return false
+        }
+        data = { settings: result.settings, favorites: result.favorites }
       }
 
-      if (result.settings) {
-        const imported = result.settings
-        await saveSettings({
-          apiBaseUrl: String(imported.apiBaseUrl || ''),
-          apiKey: String(imported.apiKey || ''),
-          model: String(imported.model || ''),
-          temperature: Number(imported.temperature) || 0.7,
-          historyLimit: Number(imported.historyLimit) || 100,
-        })
-      }
-
-      if (result.favorites && result.favorites.length > 0) {
-        await useFavoritesStore().importFavoritesFromData(result.favorites)
-      }
-
-      useAppStore().showToast('数据已导入', 'success')
+      const { imported, skipped } = await store.importData(data)
+      await loadSettings()
+      await useFavoritesStore().loadFavorites()
+      useAppStore().showToast(
+        `成功导入 ${imported} 个收藏${skipped > 0 ? `，跳过 ${skipped} 个重复` : ''}`,
+        'success'
+      )
       return true
     } catch (error) {
       console.error('Import data failed:', error)
@@ -141,7 +152,46 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  // 一次性迁移：旧版数据在客户端 IndexedDB 里，读出来整体 POST 给服务端
+  async function importLocalLegacy() {
+    try {
+      const { indexedDBService } = await import('@/utils/indexedDB')
+      const [legacySettings, legacyFavorites, words, history] = await Promise.all([
+        indexedDBService.getSettings(),
+        indexedDBService.getAllFavorites(),
+        indexedDBService.getAllWords(),
+        indexedDBService.getAllHistory(),
+      ])
+
+      const total = legacyFavorites.length + words.length + history.length
+      if (total === 0 && !legacySettings) {
+        useAppStore().showToast('本机没有旧版数据', 'info')
+        return false
+      }
+
+      const { imported, skipped } = await store.importData({
+        settings: legacySettings ?? undefined,
+        favorites: legacyFavorites,
+        words,
+        history,
+      })
+      await loadSettings()
+      await useFavoritesStore().loadFavorites()
+      useAppStore().showToast(
+        `已迁移 ${words.length} 个单词、${imported} 个收藏（跳过 ${skipped} 个重复）、${history.length} 条历史`,
+        'success',
+        5000
+      )
+      return true
+    } catch (error) {
+      console.error('Legacy migration failed:', error)
+      useAppStore().showToast('迁移失败', 'error')
+      return false
+    }
+  }
+
   async function initClipboardMonitor() {
+    if (!isTauri()) return
     try {
       await updateClipboardMonitor(clipboardTranslationEnabled.value, clipboardTranslationInterval.value)
     } catch (error) {
@@ -202,6 +252,7 @@ export const useSettingsStore = defineStore('settings', () => {
     testConnection,
     exportAllData,
     importAllData,
+    importLocalLegacy,
     initClipboardMonitor,
     updateClipboardMonitorSettings,
     toggleAutoStart,

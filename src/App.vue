@@ -10,6 +10,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useHistoryStore } from '@/stores/historyStore'
 import { useAppStore } from '@/stores/appStore'
+import { isTauri } from '@/libs/env'
 import { openDevTools } from '@/utils/tauri'
 
 const router = useRouter()
@@ -36,7 +37,9 @@ onMounted(async () => {
   favorites.loadFavorites()
   history.loadHistory()
 
-  // 剪切板翻译事件：跳到查询页，由 SearchBox 消费 clipboardText
+  // 剪切板翻译事件：跳到查询页，由 SearchBox 消费 clipboardText（只有 Tauri 客户端才有这个事件）
+  if (!isTauri()) return
+
   try {
     const { listen } = await import('@tauri-apps/api/event')
     unlisten = await listen('clipboard-translate', (event) => {

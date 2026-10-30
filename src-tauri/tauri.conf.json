@@ -5,7 +5,7 @@
   "identifier": "com.example.dict",
   "build": {
     "beforeDevCommand": "",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:8470",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },

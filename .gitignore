@@ -25,6 +25,9 @@ dist-ssr
 
 release
 
+# wsync 增量同步缓存(内含 target 绝对路径与哈希)
+.wsync/
+
 # Tauri
 src-tauri/target
 src-tauri/Cargo.lock
@@ -37,3 +40,6 @@ Thumbs.db
 .codegraph/
 scripts/output/
 scripts/output1/
+
+# 服务端 SQLite（备份就是复制这个目录）
+data/

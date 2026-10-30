@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { FavoriteWord, QueryResult } from '@/types'
-import { indexedDBService } from '@/utils/indexedDB'
+import { store } from '@/utils/store'
 import { nextMasteryLevel } from '@/libs/review'
 import { toPlain } from '@/libs/plain'
 import { useAppStore } from '@/stores/appStore'
@@ -32,7 +32,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
   async function loadFavorites() {
     isLoading.value = true
     try {
-      favorites.value = await indexedDBService.getAllFavorites()
+      favorites.value = await store.getAllFavorites()
     } catch (error) {
       console.error('Failed to load favorites:', error)
       useAppStore().showToast('加载收藏失败', 'error')
@@ -59,7 +59,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
 
     try {
-      await indexedDBService.addFavorite(toPlain(newFavorite))
+      await store.addFavorite(toPlain(newFavorite))
       favorites.value = [newFavorite, ...favorites.value]
       useAppStore().showToast(`已收藏 "${word}"`, 'success')
     } catch (error) {
@@ -72,7 +72,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     const favorite = favorites.value.find(f => f.id === id)
 
     try {
-      await indexedDBService.removeFavorite(id)
+      await store.removeFavorite(id)
       favorites.value = favorites.value.filter(f => f.id !== id)
       if (favorite) {
         useAppStore().showToast(`已取消收藏 "${favorite.word}"`, 'info')
@@ -133,7 +133,7 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
 
     try {
-      await indexedDBService.updateFavorite(id, updates)
+      await store.updateFavorite(id, updates)
       favorites.value = favorites.value.map(f =>
         f.id === id ? { ...f, ...updates } : f
       )
@@ -155,47 +155,6 @@ export const useFavoritesStore = defineStore('favorites', () => {
     }
   }
 
-  async function importFavoritesFromData(favoritesToImport: FavoriteWord[]) {
-    if (!favoritesToImport || favoritesToImport.length === 0) {
-      return { imported: 0, skipped: 0 }
-    }
-
-    const existingWords = new Set(favorites.value.map(f => f.word.toLowerCase()))
-    let imported = 0
-    let skipped = 0
-
-    for (const favorite of favoritesToImport) {
-      if (existingWords.has(favorite.word.toLowerCase())) {
-        skipped++
-        continue
-      }
-
-      try {
-        // 重新生成 ID 避免冲突
-        await indexedDBService.addFavorite(
-          toPlain({ ...favorite, id: crypto.randomUUID(), createdAt: Date.now() })
-        )
-        imported++
-      } catch (error) {
-        console.error(`Failed to import favorite "${favorite.word}":`, error)
-        skipped++
-      }
-    }
-
-    await loadFavorites()
-
-    if (imported > 0) {
-      useAppStore().showToast(
-        `成功导入 ${imported} 个收藏${skipped > 0 ? `，跳过 ${skipped} 个重复` : ''}`,
-        'success'
-      )
-    } else if (skipped > 0) {
-      useAppStore().showToast(`没有新收藏可导入（${skipped} 个重复）`, 'warning')
-    }
-
-    return { imported, skipped }
-  }
-
   return {
     favorites,
     isLoading,
@@ -211,6 +170,5 @@ export const useFavoritesStore = defineStore('favorites', () => {
     getReviewWords,
     updateReviewStatus,
     getTodayReviewProgress,
-    importFavoritesFromData,
   }
 })

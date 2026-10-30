@@ -4,15 +4,20 @@ import { Download, Upload } from '@lucide/vue'
 import { RButton, RFormRow, RInput, RInputNumber, RSwitch } from '@ruinb0w/ui'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { getPlatform } from '@/utils/tauri'
+import { isTauri } from '@/libs/env'
 import type { Settings } from '@/types'
 
 const settings = useSettingsStore()
 
 const platform = ref<'desktop' | 'mobile'>('desktop')
+const isApp = isTauri()
+const serverBase = ref(localStorage.getItem('apiBase') ?? '')
+const fileInput = ref<HTMLInputElement | null>(null)
 const isTesting = ref(false)
 const isSaving = ref(false)
 const isExporting = ref(false)
 const isImporting = ref(false)
+const isMigrating = ref(false)
 
 const form = reactive<Settings>({
   apiBaseUrl: settings.apiBaseUrl,
@@ -99,11 +104,41 @@ async function exportAll() {
 }
 
 async function importAll() {
-  isImporting.value = true
-  if (await settings.importAllData()) {
-    await settings.loadSettings()
+  // 网页端用隐藏的 file input，Tauri 里仍走原生对话框
+  if (!isApp) {
+    fileInput.value?.click()
+    return
   }
+
+  isImporting.value = true
+  await settings.importAllData()
   isImporting.value = false
+}
+
+async function onFilePicked(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  isImporting.value = true
+  try {
+    await settings.importAllData(JSON.parse(await file.text()))
+  } catch (error) {
+    console.error('Import failed:', error)
+  } finally {
+    isImporting.value = false
+  }
+}
+
+async function migrateLegacy() {
+  isMigrating.value = true
+  await settings.importLocalLegacy()
+  isMigrating.value = false
+}
+
+function saveServer() {
+  const value = serverBase.value.trim().replace(/\/$/, '')
+  if (value) localStorage.setItem('apiBase', value)
+  else localStorage.removeItem('apiBase')
+  location.reload()
 }
 </script>
 
@@ -150,7 +185,7 @@ async function importAll() {
       </div>
     </div>
 
-    <div class="settings-section">
+    <div v-if="isApp" class="settings-section">
       <h3 class="section-title">剪切板翻译</h3>
       <p class="section-desc">在任意应用中双击 Ctrl+C 触发翻译</p>
 
@@ -178,7 +213,7 @@ async function importAll() {
       </RFormRow>
     </div>
 
-    <div v-if="platform === 'desktop'" class="settings-section">
+    <div v-if="isApp && platform === 'desktop'" class="settings-section">
       <h3 class="section-title">系统设置</h3>
 
       <RFormRow label="开机自启" hint="系统启动时自动运行应用">
@@ -198,16 +233,31 @@ async function importAll() {
       </RFormRow>
     </div>
 
+    <div v-if="isApp" class="settings-section">
+      <h3 class="section-title">服务器</h3>
+      <p class="section-desc">数据与 API Key 都在服务端；桌面端默认 127.0.0.1:8471，手机填局域网或 tailscale 地址</p>
+
+      <RFormRow label="服务器地址">
+        <RInput v-model="serverBase" placeholder="http://192.168.1.5:8471" />
+      </RFormRow>
+
+      <div class="form-actions">
+        <RButton type="primary" @click="saveServer">保存并重载</RButton>
+      </div>
+    </div>
+
     <div class="settings-section">
       <h3 class="section-title">数据管理</h3>
+
+      <input ref="fileInput" type="file" accept="application/json,.json" hidden @change="onFilePicked" />
 
       <div class="data-management-item">
         <div class="data-management-info">
           <h4>导出/导入数据</h4>
-          <p>导出或导入所有数据（包括设置和收藏的单词）</p>
+          <p>导出或导入所有数据（包括设置、收藏和历史）</p>
         </div>
         <div class="data-management-actions">
-          <RButton size="small" :loading="isExporting" @click="exportAll">
+          <RButton v-if="platform !== 'mobile'" size="small" :loading="isExporting" @click="exportAll">
             <template #icon><Download :size="14" :stroke-width="1.5" /></template>
             导出
           </RButton>
@@ -215,6 +265,16 @@ async function importAll() {
             <template #icon><Upload :size="14" :stroke-width="1.5" /></template>
             导入
           </RButton>
+        </div>
+      </div>
+
+      <div class="data-management-item">
+        <div class="data-management-info">
+          <h4>从本机旧数据导入</h4>
+          <p>把这个客户端旧版 IndexedDB 里的单词/收藏/历史上传到服务端（一次性）</p>
+        </div>
+        <div class="data-management-actions">
+          <RButton size="small" :loading="isMigrating" @click="migrateLegacy">迁移</RButton>
         </div>
       </div>
     </div>

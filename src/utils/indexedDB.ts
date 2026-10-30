@@ -1,3 +1,5 @@
+// ⚠️ 只为「从旧版客户端数据迁移」保留：设置页的迁移按钮会动态 import 这个文件，
+// 把旧 IndexedDB 里的数据读出来 POST 到服务端。业务读写一律走 src/utils/store.ts。
 import Dexie, { type EntityTable } from 'dexie'
 import { WordEntry, QueryResult, FavoriteWord, HistoryItem, Settings } from '@/types'
 

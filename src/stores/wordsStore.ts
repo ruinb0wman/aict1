@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { WordEntry, QueryResult, TranslationMap, ExampleSentence } from '@/types'
-import { indexedDBService } from '@/utils/indexedDB'
+import { store } from '@/utils/store'
 import { toPlain } from '@/libs/plain'
 import { useAppStore } from '@/stores/appStore'
 
@@ -13,7 +13,7 @@ export const useWordsStore = defineStore('words', () => {
   async function init() {
     isLoading.value = true
     try {
-      cachedWords.value = await indexedDBService.getAllWords()
+      cachedWords.value = await store.getAllWords()
     } catch (error) {
       console.error('Failed to load cached words:', error)
     } finally {
@@ -23,7 +23,7 @@ export const useWordsStore = defineStore('words', () => {
 
   async function getWordFromCache(word: string) {
     try {
-      return await indexedDBService.getWord(word)
+      return await store.getWord(word)
     } catch (error) {
       console.error('Failed to get word from cache:', error)
       return null
@@ -31,7 +31,7 @@ export const useWordsStore = defineStore('words', () => {
   }
 
   async function saveWordToCache(word: string, queryResult: QueryResult) {
-    const wordEntry = await indexedDBService.saveWord(word, toPlain(queryResult))
+    const wordEntry = await store.saveWord(word, toPlain(queryResult))
     const index = cachedWords.value.findIndex(w => w.id === wordEntry.id)
     if (index >= 0) {
       cachedWords.value[index] = wordEntry
@@ -49,7 +49,7 @@ export const useWordsStore = defineStore('words', () => {
     failure: string
   ) {
     try {
-      const updated = await indexedDBService.updateWord(wordId, toPlain(updates))
+      const updated = await store.updateWord(wordId, toPlain(updates))
       cachedWords.value = cachedWords.value.map(w => (w.id === wordId ? updated : w))
       useAppStore().showToast(message, 'success', 2000)
       return updated
@@ -96,7 +96,7 @@ export const useWordsStore = defineStore('words', () => {
 
   async function deleteWord(wordId: string) {
     try {
-      await indexedDBService.deleteWord(wordId)
+      await store.deleteWord(wordId)
       cachedWords.value = cachedWords.value.filter(w => w.id !== wordId)
       useAppStore().showToast('单词已删除', 'info', 2000)
     } catch (error) {

@@ -2,37 +2,48 @@
 
 ## Project Overview
 
-**Type:** Tauri 2 + Vue 3 + TypeScript + Vite desktop/mobile application
+**Type:** Tauri 2 + Vue 3 + TypeScript + Vite 客户端 ＋ Bun 服务端（SQLite）
 **Package Manager:** Bun
 **UI library:** [`@ruinb0w/ui`](../ui)（`file:../ui`，本地软链，改库即生效）
 **Description:** AI-powered dictionary tool with word lookup, favorites, history, and review features
 
+## 架构：一个本机服务 + 三个客户端
+
+```
+bow 标签页 / Tauri 桌面 / Tauri 手机 ──HTTP──> bun server (8471) ──> data/dict.db
+                                              ├ /api/*
+                                              ├ /* → dist/
+                                              └ /api/query → 上游 LLM（API Key 只在服务端）
+```
+
+- **端口恒定**：`8471` = bun server（dev 和 prod 都是），`8470` = 只在 dev 存在的 vite，`8472` = HMR（**不能等于 8471**）。
+- **数据只在服务端**：`data/dict.db`（gitignore）。客户端不再碰 IndexedDB；旧数据靠设置页的「迁移」按钮一次性上传。
+- **同源**：web 端一律用相对 `/api`（dev 靠 vite proxy，prod 同源）；Tauri 打包版没有同源，靠打包注入的 `VITE_API_BASE` + `@tauri-apps/plugin-http`（Rust 侧请求，天然不吃 CORS，也不吃 Android 的 cleartext 限制）。所以服务端不需要 CORS 头。
+- **LLM 调用在服务端**（`server/llm.ts`）：prompt、API Key、上游请求都不在客户端。
+
 ## Build & Development Commands
 
 ```bash
-# Development
-bun run dev          # Frontend dev server only (Vite, port 1420)
-bun run dev:pc       # Full Tauri dev mode (desktop)
-bun run dev:android  # Android development
-bun run dev:ios      # iOS development
+# 开发：一条命令起两个进程（vite 8470 + bun server 8471）
+bun run dev
+bun run dev:pc       # Tauri 桌面（devUrl 已指向 8470，需先起 bun run dev）
+bun run dev:android  # 同上
+bun run serve        # 只起服务端：dist + /api 同源，端口 8471
 
-# Building
+# 构建
 bun run build        # vue-tsc --noEmit && vite build
-bun run build:pc     # Build Tauri desktop app
-bun run build:android # Build Android app
-bun run build:ios    # Build iOS app
-
-# Preview / CLI
-bun run preview      # Preview production build
-bun run tauri        # Access Tauri CLI directly
+bun run build:pc     # 打包 Tauri 桌面（VITE_API_BASE=http://127.0.0.1:8471）
 ```
+
+`dev` 与 `serve` **不能同时跑**（都占 8471）。Ctrl-C 没收干净时 `pkill -f 'server/index.ts'`。
 
 ## Testing Commands
 
 ```bash
 bunx vitest run                    # 全部测试
 bunx vitest run src/libs/history.test.ts   # 单个文件
-bunx vitest                        # watch 模式
+bun test server                    # 服务端用例（bun:test，DB 语义回归）
+bun run test                       # vitest + bun test 一起跑
 bunx vue-tsc --noEmit              # 类型检查（.vue 也需要跑它）
 ```
 
@@ -71,7 +82,7 @@ import '@ruinb0w/ui/style.css'   // 入口引入一次（src/main.ts）
 |------|------------|---------|
 | 组件（SFC） | PascalCase | `SearchBox.vue`, `QueryResult.vue` |
 | 页面 | PascalCase | `pages/Settings.vue` |
-| 工具 / 纯逻辑 | camelCase | `api.ts`, `indexedDB.ts`, `libs/history.ts` |
+| 工具 / 纯逻辑 | camelCase | `store.ts`, `api.ts`, `libs/history.ts` |
 | composable | camelCase，`use` 前缀 | `useNetworkToast.ts` |
 | Pinia store | camelCase，`use*Store` | `useWordsStore.ts` |
 | 类型 / 接口 | PascalCase | `QueryResult`, `FavoriteWord` |
@@ -143,17 +154,10 @@ export const useFavoritesStore = defineStore('favorites', () => {
 })
 ```
 
-### 写库必须过 `toPlain()`
+### `toPlain()`：HTTP 之后已非必须
 
-Vue 的 `ref` / `reactive` 产出的是 **Proxy**，Dexie 写库走 structured-clone，遇到 Proxy 直接抛
-`DataCloneError`。**类型检查和单测都抓不到，只有真跑一次写库才暴露。**
-
-```ts
-import { toPlain } from '@/libs/plain'
-await indexedDBService.addFavorite(toPlain(newFavorite))
-```
-
-凡是「表单/响应式状态直接写库」都要过一道：`addFavorite` / `saveHistory` / `updateWord*` 已处理。
+现在写库是 `JSON.stringify` + HTTP，Vue 的 Proxy 能正常序列化，所以 `toPlain()` 不再是硬要求，代码里留着只是习惯。
+**但如果哪天又出现直接进 structured-clone 的路径（迁移代码里就有），Proxy 会抛 `DataCloneError`，类型检查和单测都抓不到。**
 
 ### 错误与提示
 
@@ -180,20 +184,27 @@ await indexedDBService.addFavorite(toPlain(newFavorite))
 ## Project Structure
 
 ```
+server/           # Bun 服务端（bun:sqlite + Bun.serve，无框架依赖）
+├─ index.ts       # 路由 + 静态资源 + 端口
+├─ db.ts          # SQLite 表与语义（照搬旧 indexedDB 实现）
+├─ llm.ts         # prompt 与上游 LLM 调用（key 只在这里）
+└─ index.test.ts  # bun:test
+
 src/
 ├─ components/     # 通用组件（TitleBar / BottomNav / Toast / SearchBox / QueryResult…）
 ├─ composables/    # 组合式函数
-├─ libs/           # 框架无关的纯逻辑（含测试）
+├─ libs/           # 框架无关的纯逻辑（含测试）：history / review / text / env / plain
 ├─ pages/          # 路由页面
 ├─ router/         # 路由表
 ├─ stores/         # Pinia stores
 ├─ types/          # 类型
-├─ utils/          # api / tauri / indexedDB（框架无关，含测试）
+├─ utils/          # store.ts(HTTP 数据层) api.ts(LLM 入口) tauri.ts(原生能力) indexedDB.ts(仅迁移用)
 ├─ App.vue         # 根组件（外壳 + 全局宿主）
 ├─ main.ts         # 入口（pinia / router / 主题 / 图标登记）
 └─ index.css       # 全局样式
 
-src-tauri/         # Rust 后端（Tauri）
+data/dict.db       # SQLite（gitignore，备份就是复制它）
+src-tauri/         # Rust 后端（Tauri 客户端 + 桌面专属能力）
 ```
 
 ## Key Dependencies
@@ -203,15 +214,16 @@ src-tauri/         # Rust 后端（Tauri）
 - **@lucide/vue** - 图标（库的 peerDependency）
 - **pinia** - 状态管理
 - **vue-router** - 路由（hash 模式）
-- **dexie** - IndexedDB 封装
+- **dexie** - 只在「从旧版 IndexedDB 迁移」这一条路径上用到（`src/utils/indexedDB.ts`，动态 import，不进主包）；不要再用它写业务数据
 - **uuid** - UUID 生成
 
 ## Development Notes
 
-- 窗口尺寸：400x600（无边框），桌面构建；Android/iOS 构建共用同一前端
-- 本地数据：IndexedDB（Dexie，库名 `DictDB`，`DB_VERSION = 4`）；无 localStorage 依赖
+- 窗口尺寸：400x600（无边框）；Android/iOS 构建共用同一前端
+- 数据：**服务端** `data/dict.db`（SQLite，`words / favorites / history / settings` 四表，JSON 型字段存 doc 列）。客户端没有持久数据，只有 `localStorage['apiBase']` 一个键（服务器地址，仅 Tauri 需要）
 - 系统托盘、剪贴板监听（双击 Ctrl+C 触发翻译）由 Rust 侧驱动，前端只收 `clipboard-translate` 事件
-- 支持中英互译；英译中单词会本地缓存，中译英结果和句子不缓存
+- 支持中英互译；英译中单词进服务端缓存，中译英结果和句子不缓存
+- 原生能力（托盘/自启/剪贴板监听）只在 Tauri 里存在，用 `isTauri()`（`src/libs/env.ts`）分支；bow 里没有
 
 ## Code Sync Rule
 

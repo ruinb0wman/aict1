@@ -45,7 +45,7 @@ async function check() {
 
   isChecking.value = true
   try {
-    result.value = await checkGrammar(text.value.trim(), settings)
+    result.value = await checkGrammar(text.value.trim())
     app.showToast('语法检查完成', 'success')
   } catch (error) {
     app.showToast(error instanceof Error ? error.message : '检查失败', 'error')

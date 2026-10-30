@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { HistoryItem, QueryResponse } from '@/types'
-import { indexedDBService } from '@/utils/indexedDB'
-import { insertHistory, isSentenceResult } from '@/libs/history'
+import { store } from '@/utils/store'
+import { isSentenceResult } from '@/libs/history'
 import { toPlain } from '@/libs/plain'
 import { useAppStore } from '@/stores/appStore'
 
@@ -13,7 +13,7 @@ export const useHistoryStore = defineStore('history', () => {
   async function loadHistory() {
     isLoading.value = true
     try {
-      history.value = await indexedDBService.getAllHistory()
+      history.value = await store.getAllHistory()
     } catch (error) {
       console.error('Failed to load history:', error)
       useAppStore().showToast('加载历史记录失败', 'error')
@@ -22,19 +22,8 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
-  async function saveHistory(items: HistoryItem[]) {
-    try {
-      // 过 toPlain：history.value 里的元素是响应式 Proxy，直接进 Dexie 会 DataCloneError
-      const plain = toPlain(items)
-      await indexedDBService.saveHistory(plain)
-      history.value = plain
-    } catch (error) {
-      console.error('Failed to save history:', error)
-      useAppStore().showToast('保存历史记录失败', 'error')
-    }
-  }
-
-  async function addHistory(word: string, result: QueryResponse, historyLimit: number) {
+  // 去重 + 按 historyLimit 截断在服务端做，返回的就是截断后的完整列表
+  async function addHistory(word: string, result: QueryResponse) {
     const item: HistoryItem = {
       id: crypto.randomUUID(),
       word,
@@ -42,17 +31,34 @@ export const useHistoryStore = defineStore('history', () => {
       result: toPlain(result),
       timestamp: Date.now(),
     }
-    await saveHistory(insertHistory(history.value, item, historyLimit))
+
+    try {
+      history.value = await store.appendHistory(item)
+    } catch (error) {
+      console.error('Failed to add history:', error)
+      useAppStore().showToast('保存历史记录失败', 'error')
+    }
   }
 
   async function removeHistory(id: string) {
-    await saveHistory(history.value.filter(h => h.id !== id))
-    useAppStore().showToast('已删除历史记录', 'info')
+    try {
+      history.value = await store.removeHistory(id)
+      useAppStore().showToast('已删除历史记录', 'info')
+    } catch (error) {
+      console.error('Failed to remove history:', error)
+      useAppStore().showToast('删除历史记录失败', 'error')
+    }
   }
 
   async function clearHistory() {
-    await saveHistory([])
-    useAppStore().showToast('已清空所有历史记录', 'success')
+    try {
+      await store.clearHistory()
+      history.value = []
+      useAppStore().showToast('已清空所有历史记录', 'success')
+    } catch (error) {
+      console.error('Failed to clear history:', error)
+      useAppStore().showToast('清空历史记录失败', 'error')
+    }
   }
 
   function exists(word: string) {
@@ -67,7 +73,6 @@ export const useHistoryStore = defineStore('history', () => {
     history,
     isLoading,
     loadHistory,
-    saveHistory,
     addHistory,
     removeHistory,
     clearHistory,

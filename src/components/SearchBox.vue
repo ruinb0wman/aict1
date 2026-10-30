@@ -7,7 +7,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { useHistoryStore } from '@/stores/historyStore'
 import { useWordsStore } from '@/stores/wordsStore'
 import { queryLLM, isSentence, isChinese } from '@/utils/api'
-import { IndexedDBService } from '@/utils/indexedDB'
+import { toQueryResult } from '@/utils/store'
 
 const app = useAppStore()
 const settings = useSettingsStore()
@@ -33,12 +33,12 @@ async function performSearch(queryText: string) {
     if (!isSentenceQuery && !isChinese(queryText)) {
       const cachedWord = await words.getWordFromCache(queryText)
       if (cachedWord) {
-        const result = IndexedDBService.toQueryResult(cachedWord)
+        const result = toQueryResult(cachedWord)
         app.setQueryResult(result)
         isFromCache.value = true
         // 命中缓存也算一次查询次数
         await words.saveWordToCache(queryText, result)
-        await history.addHistory(queryText, result, settings.historyLimit)
+        await history.addHistory(queryText, result)
         app.showToast('已从本地缓存加载', 'success', 2000)
         return
       }
@@ -50,7 +50,7 @@ async function performSearch(queryText: string) {
       return
     }
 
-    const result = await queryLLM(queryText, settings)
+    const result = await queryLLM(queryText)
     app.setQueryResult(result)
 
     // 中译英结果和句子不缓存
@@ -58,7 +58,7 @@ async function performSearch(queryText: string) {
       await words.saveWordToCache(queryText, result as never)
     }
 
-    await history.addHistory(queryText, result, settings.historyLimit)
+    await history.addHistory(queryText, result)
     // 成功后记录 lastQuery，失败时允许重试
     app.setLastQuery(queryText)
     app.showToast('查询成功', 'success', 2000)

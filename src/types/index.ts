@@ -93,7 +93,7 @@ export type ToastState = {
   visible: boolean;
 };
 
-// ==================== 单词条目类型（IndexedDB 存储）====================
+// ==================== 单词条目类型（服务端 words 表）====================
 
 export type WordEntry = {
   id: string;              // 单词唯一标识（使用单词本身作为 ID）
