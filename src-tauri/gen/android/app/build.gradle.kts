@@ -17,7 +17,9 @@ android {
     compileSdk = 36
     namespace = "com.example.dict"
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
+        // 服务端是自建的本机/LAN 服务，默认地址是 http://<LAN IP>:8471，
+        // release 也要允许明文；否则 WebView 侧 fetch 会被 Android 拦掉（plugin-http 走 Rust 不受限，两条路都要通）。
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.example.dict"
         minSdk = 24
         targetSdk = 36
