@@ -33,7 +33,8 @@ bun run serve        # 只起服务端：dist + /api 同源，端口 8471
 bun run build        # vue-tsc --noEmit && vite build
 ```
 
-`dev` 与 `serve` **不能同时跑**（都占 8471）。Ctrl-C 没收干净时 `pkill -f 'server/index.ts'`。
+`dev` 与 `serve` **不能同时跑**（都占 8471）。Ctrl-C 没收干净后报 `EADDRINUSE`（8471 是 server、8470/8472 是 vite），
+用 `ss -ltnp | grep -E ':847[0-2]'` 找到 pid 再 `kill`；两个子进程要分别收尸，杀父进程不会带走子进程。
 
 ## Testing Commands
 
