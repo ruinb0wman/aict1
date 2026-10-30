@@ -19,5 +19,10 @@ const activeKey = computed(() => String(route.name ?? 'search'))
 </script>
 
 <template>
-  <RTabBar :items="items" :active-key="activeKey" @select="router.push({ name: $event })" />
+  <RTabBar
+    v-if="route.name !== 'offline'"
+    :items="items"
+    :active-key="activeKey"
+    @select="router.push({ name: $event })"
+  />
 </template>

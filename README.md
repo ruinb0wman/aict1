@@ -2,10 +2,10 @@
 
 一个 AI 驱动的词典工具：输入单词或句子，由配置好的大模型按固定格式返回内容并渲染。
 
-架构是「一个本机服务 + 三个客户端」——数据与 API Key 都在本机服务上，浏览器（bow）、Tauri 桌面、Tauri 手机共用同一份数据。
+架构是「一个本机服务 + 两个客户端」——数据与 API Key 都在本机服务上，浏览器（bow）和 Android App 共用同一份数据。
 
 ```
-bow 标签页 / Tauri 桌面 / Tauri 手机 ──HTTP──> bun server (8471) ──> data/dict.db
+bow 标签页 / Android App ──HTTP──> bun server (8471) ──> data/dict.db
                                               ├ /api/*      数据、设置、LLM 代理
                                               ├ /*          dist/ 静态页面
                                               └ /api/query  → 上游大模型（key 只在服务端）
@@ -21,9 +21,8 @@ bow 标签页 / Tauri 桌面 / Tauri 手机 ──HTTP──> bun server (8471) 
 - 📝 **查询历史** - 自动保存，支持查看、单条删除、清空
 - ✏️ **单词编辑** - 自定义翻译、例句、近反义词，添加个人批注
 - 🧐 **语法检查** - 给出修正文本、逐条修改原因与整体评价
-- 📋 **剪切板翻译** - 双击 Ctrl+C 触发（仅 Tauri 桌面端）
 - 💾 **服务端缓存** - 查过的单词进 SQLite，重复查询免 API 调用，三端共享
-- 🖥️ **系统托盘** - 托盘常驻，关闭窗口隐藏而非退出（仅桌面端）
+- 🛰️ **断线接管** - 连不上服务器时进错误页，可改地址重试，每 5 秒自动探活
 
 ## Preview
 
@@ -59,18 +58,16 @@ bun run dev        # 一条命令起两个进程：vite(8470) + bun server(8471)
 
 - dev 和 prod 的**服务端端口都是 8471**，开发时由 vite 把 `/api` 代理过去，所以页面永远同源。
 - 数据在 `data/dict.db`（已 gitignore）——备份就是复制这个文件。
-- 从旧版（纯客户端 IndexedDB）升上来时，在 **Tauri 桌面端** 的设置 → 数据管理 → 「迁移」一次性上传旧数据。
+- 从旧版（纯客户端 IndexedDB）升上来时，在 **Android App** 的设置 → 数据管理 → 「迁移」一次性上传旧数据。
 
 ## 命令
 
 ```bash
 bun run dev          # vite 8470 + server 8471（HMR 走 8472）
 bun run serve        # 只起服务端：dist + /api 同源，端口 8471
-bun run dev:pc       # Tauri 桌面（devUrl 指 8470，需先跑 bun run dev）
-bun run dev:android  # 同上
+bun run dev:android  # Android（devUrl 指 8470，需先跑 bun run dev）
 
 bun run build        # vue-tsc --noEmit && vite build
-bun run build:pc     # 打包 Tauri 桌面（自动注入 VITE_API_BASE=http://127.0.0.1:8471）
 
 bun run test         # vitest（前端）+ bun test server（服务端）
 bun run typecheck    # vue-tsc --noEmit
@@ -94,7 +91,14 @@ tailscale serve --bg --https=8471 http://127.0.0.1:8471   # → https://<机器�
 
 ## 开发环境补充
 
-Windows 下编译 Tauri 需要 MSVC 链接器，请安装 [Build Tools for Visual Studio 2022](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022)：「工作负载」里勾 **「使用 C++ 的桌面开发」**，装完重启终端。代码只在 WSL 里改，用 `wsync` 同步到 Windows 侧。
+开发和构建**只在 WSL 里做**（Windows 侧的检出已废弃，不需要 MSVC 工具链）。
+
+Android 出包额外需要：
+
+- NDK：`/opt/android-sdk/ndk/27.3.13750724`
+- `JAVA_HOME=/usr/lib/jvm/java-17-openjdk`
+- 给 x86_64 模拟器出包用 `--target x86_64`
+- `bun run dev:android` 里的 `--host` 必须是本机 LAN IP（`ip a` 看），否则手机/模拟器连不到 dev server
 
 ## Licence
 

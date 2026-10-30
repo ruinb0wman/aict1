@@ -10,29 +10,92 @@ import type {
   GrammarCheckResult,
 } from '@/types'
 import { isTauri } from '@/libs/env'
+import { markOnline, markUnreachable } from '@/libs/serverState'
 
-// web 端永远同源（dev 靠 vite proxy，prod 同源）；Tauri 打包版没有同源，靠打包时注入的绝对地址
-// localStorage / location 在 node（vitest）里不存在，取不到就退回空串
-const BASE = (() => {
+const DEFAULT_TIMEOUT = 8000
+// 服务端自己给上游 LLM 30s，这里要比它宽
+const LLM_TIMEOUT = 60000
+
+/**
+ * 规整用户填的地址：补 scheme、去尾斜杠；空串表示「同源」（浏览器端）。
+ * 少了这一步，`192.168.1.2:8471` 会被当相对路径，表现成「填了却还是连不上」。
+ */
+export function normalizeBase(input: string): string {
+  const trimmed = input.trim().replace(/\/+$/, '')
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  return `http://${trimmed}`
+}
+
+function readStoredBase(): string {
+  // Tauri 打包版靠打包时注入的 VITE_API_BASE；localStorage 里的值优先
+  const baked = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
   try {
-    return localStorage.getItem('apiBase') || (import.meta.env.VITE_API_BASE as string | undefined) || location.origin
+    return normalizeBase(localStorage.getItem('apiBase') || baked)
   } catch {
-    return ''
+    return normalizeBase(baked)
   }
-})()
+}
+
+let base = readStoredBase()
+
+/** 当前服务器地址；空串 = 与页面同源 */
+export function getBase(): string {
+  return base
+}
+
+/** 改服务器地址（持久化到 localStorage），立即对后续请求生效 */
+export function setBase(input: string): void {
+  base = normalizeBase(input)
+  try {
+    if (base) localStorage.setItem('apiBase', base)
+    else localStorage.removeItem('apiBase')
+  } catch {
+    // 隐私模式等拿不到 localStorage 时忽略：地址仍在本进程内生效
+  }
+}
+
+function resolveBase(): string {
+  return base || location.origin
+}
 
 let tauriFetch: typeof fetch | undefined
 
-async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  const url = `${BASE}${path}`
+async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   if (!isTauri()) return fetch(url, init)
   // Tauri 走 Rust 侧请求：不吃 CORS，也不吃 Android 的 cleartext 限制
   tauriFetch ??= (await import('@tauri-apps/plugin-http')).fetch as typeof fetch
   return tauriFetch(url, init)
 }
 
+/** 探活：2s 内拿不到 /api/health 就算不可用 */
+export async function probeServer(target?: string): Promise<boolean> {
+  const baseUrl = target ? normalizeBase(target) || location.origin : resolveBase()
+  try {
+    const response = await apiFetch(`${baseUrl}/api/health`, { signal: AbortSignal.timeout(2000) })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+function timeoutFor(path: string): number {
+  return path.startsWith('/api/query') || path.startsWith('/api/grammar') ? LLM_TIMEOUT : DEFAULT_TIMEOUT
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await apiFetch(path, init)
+  let response: Response
+  try {
+    response = await apiFetch(`${resolveBase()}${path}`, { ...init, signal: AbortSignal.timeout(timeoutFor(path)) })
+  } catch (error) {
+    // 传输层失败 = 地址/网络问题（连不上、超时、证书不对）→ 交给离线页接管
+    markUnreachable(error instanceof Error ? error.message : String(error))
+    throw new Error('连不上服务器')
+  }
+
+  // 服务端可达：业务错误（404/500）不算连不上
+  markOnline()
+
   const raw = await response.text()
   const data = raw ? (JSON.parse(raw) as unknown) : null
   if (!response.ok) {
@@ -103,10 +166,8 @@ export const store = {
 
   // ==================== 备份 ====================
   exportRaw: async (): Promise<string> => {
-    const response = await apiFetch('/api/export')
+    const response = await apiFetch(`${resolveBase()}/api/export`, { signal: AbortSignal.timeout(DEFAULT_TIMEOUT) })
     return response.text()
   },
   importData: (data: unknown) => send<{ imported: number; skipped: number }>('/api/import', 'POST', data),
 }
-
-export { BASE as apiBase }

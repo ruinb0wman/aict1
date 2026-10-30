@@ -25,9 +25,6 @@ dist-ssr
 
 release
 
-# wsync 增量同步缓存(内含 target 绝对路径与哈希)
-.wsync/
-
 # Tauri
 src-tauri/target
 src-tauri/Cargo.lock

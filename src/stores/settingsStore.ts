@@ -5,7 +5,6 @@ import { defaultSettings } from '@/types'
 import { store } from '@/utils/store'
 import { isTauri } from '@/libs/env'
 import { testAPIConnection } from '@/utils/api'
-import { exportData, importData, updateClipboardMonitor, setAutoStart, setSilentStart } from '@/utils/tauri'
 import { useAppStore } from '@/stores/appStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 
@@ -15,10 +14,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const model = ref(defaultSettings.model)
   const temperature = ref(defaultSettings.temperature)
   const historyLimit = ref(defaultSettings.historyLimit)
-  const clipboardTranslationEnabled = ref(defaultSettings.clipboardTranslationEnabled)
-  const clipboardTranslationInterval = ref(defaultSettings.clipboardTranslationInterval)
-  const autoStart = ref(defaultSettings.autoStart)
-  const silentStart = ref(defaultSettings.silentStart)
   const isLoading = ref(false)
 
   function snapshot(): Settings {
@@ -28,10 +23,6 @@ export const useSettingsStore = defineStore('settings', () => {
       model: model.value,
       temperature: temperature.value,
       historyLimit: historyLimit.value,
-      clipboardTranslationEnabled: clipboardTranslationEnabled.value,
-      clipboardTranslationInterval: clipboardTranslationInterval.value,
-      autoStart: autoStart.value,
-      silentStart: silentStart.value,
     }
   }
 
@@ -46,10 +37,6 @@ export const useSettingsStore = defineStore('settings', () => {
         model.value = saved.model || defaultSettings.model
         temperature.value = saved.temperature ?? defaultSettings.temperature
         historyLimit.value = saved.historyLimit || defaultSettings.historyLimit
-        clipboardTranslationEnabled.value = saved.clipboardTranslationEnabled ?? defaultSettings.clipboardTranslationEnabled
-        clipboardTranslationInterval.value = saved.clipboardTranslationInterval ?? defaultSettings.clipboardTranslationInterval
-        autoStart.value = saved.autoStart ?? defaultSettings.autoStart
-        silentStart.value = saved.silentStart ?? defaultSettings.silentStart
       }
     } catch (error) {
       console.error('Failed to load settings:', error)
@@ -69,10 +56,6 @@ export const useSettingsStore = defineStore('settings', () => {
       model.value = merged.model
       temperature.value = merged.temperature
       historyLimit.value = merged.historyLimit
-      clipboardTranslationEnabled.value = merged.clipboardTranslationEnabled
-      clipboardTranslationInterval.value = merged.clipboardTranslationInterval
-      autoStart.value = merged.autoStart
-      silentStart.value = merged.silentStart
       useAppStore().showToast('设置已保存', 'success')
     } catch (error) {
       console.error('Failed to save settings:', error)
@@ -92,52 +75,40 @@ export const useSettingsStore = defineStore('settings', () => {
     return result
   }
 
+  /** 服务器地址变了：把依赖服务端的数据全部重拉 */
+  async function serverChanged() {
+    const { useHistoryStore } = await import('@/stores/historyStore')
+    const { useWordsStore } = await import('@/stores/wordsStore')
+    await Promise.all([
+      loadSettings(),
+      useFavoritesStore().loadFavorites(),
+      useHistoryStore().loadHistory(),
+      useWordsStore().init(),
+    ])
+    useAppStore().showToast('已切换到新服务器', 'success')
+  }
+
+  /** 服务端导出整份数据，前端触发下载。移动端 WebView 不支持下载，所以按钮在那里隐藏。 */
   async function exportAllData() {
     try {
-      // 浏览器里没有原生文件对话框：直接下载服务端导出的文件
-      if (!isTauri()) {
-        const raw = await store.exportRaw()
-        const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }))
-        const link = document.createElement('a')
-        link.href = url
-        link.download = `aict1-${new Date().toISOString().slice(0, 10)}.json`
-        link.click()
-        URL.revokeObjectURL(url)
-        useAppStore().showToast('数据已导出', 'success')
-        return
-      }
-
-      const result = await exportData(snapshot(), useFavoritesStore().favorites)
-      if (result.cancelled) return
-
-      if (result.success) {
-        useAppStore().showToast('数据已导出', 'success')
-      } else {
-        useAppStore().showToast(result.error || '导出失败', 'error')
-      }
+      const raw = await store.exportRaw()
+      const url = URL.createObjectURL(new Blob([raw], { type: 'application/json' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `aict1-${new Date().toISOString().slice(0, 10)}.json`
+      link.click()
+      URL.revokeObjectURL(url)
+      useAppStore().showToast('数据已导出', 'success')
     } catch (error) {
       console.error('Export data failed:', error)
       useAppStore().showToast('导出失败', 'error')
     }
   }
 
-  // payload 由 Settings.vue 在网页端读文件后传入；Tauri 里仍走原生对话框
-  async function importAllData(payload?: unknown) {
+  /** payload 由 Settings.vue 读文件后传入 */
+  async function importAllData(payload: unknown) {
     try {
-      let data = payload
-
-      if (data === undefined) {
-        if (!isTauri()) return false
-        const result = await importData()
-        if (result.cancelled) return false
-        if (!result.success) {
-          useAppStore().showToast(result.error || '导入失败', 'error')
-          return false
-        }
-        data = { settings: result.settings, favorites: result.favorites }
-      }
-
-      const { imported, skipped } = await store.importData(data)
+      const { imported, skipped } = await store.importData(payload)
       await loadSettings()
       await useFavoritesStore().loadFavorites()
       useAppStore().showToast(
@@ -152,7 +123,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  // 一次性迁移：旧版数据在客户端 IndexedDB 里，读出来整体 POST 给服务端
+  /** 一次性迁移：旧版数据在客户端 IndexedDB 里，读出来整体 POST 给服务端 */
   async function importLocalLegacy() {
     try {
       const { indexedDBService } = await import('@/utils/indexedDB')
@@ -190,62 +161,12 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
-  async function initClipboardMonitor() {
-    if (!isTauri()) return
-    try {
-      await updateClipboardMonitor(clipboardTranslationEnabled.value, clipboardTranslationInterval.value)
-    } catch (error) {
-      console.error('Failed to init clipboard monitor:', error)
-    }
-  }
-
-  async function updateClipboardMonitorSettings(enabled: boolean, interval: number) {
-    try {
-      await updateClipboardMonitor(enabled, interval)
-      await saveSettings({
-        clipboardTranslationEnabled: enabled,
-        clipboardTranslationInterval: interval,
-      })
-    } catch (error) {
-      console.error('Failed to update clipboard monitor:', error)
-      useAppStore().showToast('剪切板监听设置失败', 'error')
-    }
-  }
-
-  async function toggleAutoStart(enabled: boolean) {
-    try {
-      await setAutoStart(enabled)
-      autoStart.value = enabled
-      await saveSettings({ autoStart: enabled })
-      useAppStore().showToast(enabled ? '已开启开机自启' : '已关闭开机自启', 'success')
-    } catch (error) {
-      console.error('Failed to set autostart:', error)
-      useAppStore().showToast('自启设置失败', 'error')
-    }
-  }
-
-  async function toggleSilentStart(enabled: boolean) {
-    try {
-      await setSilentStart(enabled)
-      silentStart.value = enabled
-      await saveSettings({ silentStart: enabled })
-      useAppStore().showToast(enabled ? '已开启静默启动' : '已关闭静默启动', 'success')
-    } catch (error) {
-      console.error('Failed to set silent start:', error)
-      useAppStore().showToast('静默启动设置失败', 'error')
-    }
-  }
-
   return {
     apiBaseUrl,
     apiKey,
     model,
     temperature,
     historyLimit,
-    clipboardTranslationEnabled,
-    clipboardTranslationInterval,
-    autoStart,
-    silentStart,
     isLoading,
     loadSettings,
     saveSettings,
@@ -253,9 +174,7 @@ export const useSettingsStore = defineStore('settings', () => {
     exportAllData,
     importAllData,
     importLocalLegacy,
-    initClipboardMonitor,
-    updateClipboardMonitorSettings,
-    toggleAutoStart,
-    toggleSilentStart,
+    serverChanged,
+    isTauri,
   }
 })

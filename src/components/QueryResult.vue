@@ -6,7 +6,7 @@ import { useAppStore } from '@/stores/appStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useWordsStore } from '@/stores/wordsStore'
 import { isSentence } from '@/utils/api'
-import { speak } from '@/utils/tauri'
+import { speak } from '@/libs/speech'
 import QueryResultEdit from './QueryResultEdit.vue'
 import NoteSection from './NoteSection.vue'
 import type {

@@ -10,7 +10,7 @@
 ## 架构：一个本机服务 + 三个客户端
 
 ```
-bow 标签页 / Tauri 桌面 / Tauri 手机 ──HTTP──> bun server (8471) ──> data/dict.db
+bow 标签页 / Tauri(Android) ──HTTP──> bun server (8471) ──> data/dict.db
                                               ├ /api/*
                                               ├ /* → dist/
                                               └ /api/query → 上游 LLM（API Key 只在服务端）
@@ -26,13 +26,11 @@ bow 标签页 / Tauri 桌面 / Tauri 手机 ──HTTP──> bun server (8471) 
 ```bash
 # 开发：一条命令起两个进程（vite 8470 + bun server 8471）
 bun run dev
-bun run dev:pc       # Tauri 桌面（devUrl 已指向 8470，需先起 bun run dev）
-bun run dev:android  # 同上
+bun run dev:android  # Tauri 移动端（devUrl 已指向 8470，需先起 bun run dev）
 bun run serve        # 只起服务端：dist + /api 同源，端口 8471
 
 # 构建
 bun run build        # vue-tsc --noEmit && vite build
-bun run build:pc     # 打包 Tauri 桌面（VITE_API_BASE=http://127.0.0.1:8471）
 ```
 
 `dev` 与 `serve` **不能同时跑**（都占 8471）。Ctrl-C 没收干净时 `pkill -f 'server/index.ts'`。
@@ -60,7 +58,7 @@ import '@ruinb0w/ui/style.css'   // 入口引入一次（src/main.ts）
 ```
 
 - 主题：`document.documentElement.dataset.theme = 'exp1-dark'`（深色单主题，色值与本项目一致）
-- 密度：桌面 `default`（36px 控件），移动端 `touch`（44px），见 `src/main.ts`
+- 密度：桌面浏览器 `default`（36px 控件），移动端 `touch`（44px），见 `src/main.ts`（Tauri 客户端只剩移动端）
 - 图标：`@lucide/vue`（**不是** lucide-react / lucide-vue-next）。按名字传给组件的图标要先
   `registerIcons({ ... })` 登记（`src/main.ts` 里），否则只显示名字
 - **不引入 Tailwind**（本项目的 Tailwind 已删除，它从未真正生效过）；样式只读 token：
@@ -198,13 +196,13 @@ src/
 ├─ router/         # 路由表
 ├─ stores/         # Pinia stores
 ├─ types/          # 类型
-├─ utils/          # store.ts(HTTP 数据层) api.ts(LLM 入口) tauri.ts(原生能力) indexedDB.ts(仅迁移用)
+├─ utils/          # store.ts(HTTP 数据层 + 服务器地址) api.ts(LLM 入口) indexedDB.ts(仅迁移用)
 ├─ App.vue         # 根组件（外壳 + 全局宿主）
 ├─ main.ts         # 入口（pinia / router / 主题 / 图标登记）
 └─ index.css       # 全局样式
 
 data/dict.db       # SQLite（gitignore，备份就是复制它）
-src-tauri/         # Rust 后端（Tauri 客户端 + 桌面专属能力）
+src-tauri/         # Tauri 客户端外壳（只剩 http 插件，无自定义命令）
 ```
 
 ## Key Dependencies
@@ -221,13 +219,13 @@ src-tauri/         # Rust 后端（Tauri 客户端 + 桌面专属能力）
 
 - 窗口尺寸：400x600（无边框）；Android/iOS 构建共用同一前端
 - 数据：**服务端** `data/dict.db`（SQLite，`words / favorites / history / settings` 四表，JSON 型字段存 doc 列）。客户端没有持久数据，只有 `localStorage['apiBase']` 一个键（服务器地址，仅 Tauri 需要）
-- 系统托盘、剪贴板监听（双击 Ctrl+C 触发翻译）由 Rust 侧驱动，前端只收 `clipboard-translate` 事件
 - 支持中英互译；英译中单词进服务端缓存，中译英结果和句子不缓存
-- 原生能力（托盘/自启/剪贴板监听）只在 Tauri 里存在，用 `isTauri()`（`src/libs/env.ts`）分支；bow 里没有
+- **桌面端已整体移除**（2026-10-30）：托盘、双击 Ctrl+C 剪贴板翻译、自启、静默启动、单实例、窗口控制、原生文件对话框连同对应插件/命令/权限一起删掉，`lib.rs` 只剩 plugin-http。需要区分环境时用 `isTauri()`（`src/libs/env.ts`）
+- 连不上服务器时，`router` 守卫会把所有页面交给 `src/pages/Offline.vue`：显示当前地址与原因，可改地址重试，并每 5s 自动探活，恢复后回原页面
 
-## Code Sync Rule
+## 运行环境（只有 WSL）
 
-- **Always modify code in WSL only** (`~/Workspace/aict1`)
-- **Never modify Windows files** under `/mnt/c/Workspace/aict1/`
-- The user syncs code from WSL to Windows using `wsync`
-- If you need to check something on Windows, read only — do not write
+- **只在 WSL 里改代码、跑 dev、构建**（`~/Workspace/aict1`）。
+- **Windows 侧（`C:\Workspace\aict1`）已废弃**：不再用 wsync 同步，也不在那边验证。不要重建 `.wsync.config.js` / `.sync.config.json`。
+- 使用面只有两个：**bow 里的网页** 与 **Android 移动端**。
+- Android 构建也只在 WSL：需要 `/opt/android-sdk/ndk/27.3.13750724` 与 `JAVA_HOME=/usr/lib/jvm/java-17-openjdk`；给 Windows 宿主的 `api35` AVD 出包用 `--target x86_64`。`dev:android` 里的 `--host` 必须等于本机 LAN IP（现在 `192.168.1.2`，换网络要改），否则手机会连不到 dev server。

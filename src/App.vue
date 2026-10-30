@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted } from 'vue'
 import { RouterView, useRouter } from 'vue-router'
 import { RConfirmHost, RErrorBoundary } from '@ruinb0w/ui'
 import TitleBar from '@/components/TitleBar.vue'
@@ -9,54 +9,27 @@ import { useNetworkToast } from '@/composables/useNetworkToast'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { useFavoritesStore } from '@/stores/favoritesStore'
 import { useHistoryStore } from '@/stores/historyStore'
-import { useAppStore } from '@/stores/appStore'
-import { isTauri } from '@/libs/env'
-import { openDevTools } from '@/utils/tauri'
+import { probeServer } from '@/utils/store'
+import { markUnreachable } from '@/libs/serverState'
 
-const router = useRouter()
 const settings = useSettingsStore()
 const favorites = useFavoritesStore()
 const history = useHistoryStore()
-const app = useAppStore()
+const router = useRouter()
 
 useNetworkToast()
 
-let unlisten: (() => void) | undefined
-
-function onKeydown(event: KeyboardEvent) {
-  if (event.ctrlKey && event.shiftKey && event.key === 'I') {
-    event.preventDefault()
-    openDevTools()
-  }
-}
-
 onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
+  // 先确认服务器在，连不上就直接交给错误页，不要连发三次「加载失败」
+  if (!(await probeServer())) {
+    markUnreachable('启动探活失败：连接被拒绝或超时')
+    router.replace({ name: 'offline', query: { from: '/' } })
+    return
+  }
 
-  settings.loadSettings().then(() => settings.initClipboardMonitor())
+  settings.loadSettings()
   favorites.loadFavorites()
   history.loadHistory()
-
-  // 剪切板翻译事件：跳到查询页，由 SearchBox 消费 clipboardText（只有 Tauri 客户端才有这个事件）
-  if (!isTauri()) return
-
-  try {
-    const { listen } = await import('@tauri-apps/api/event')
-    unlisten = await listen('clipboard-translate', (event) => {
-      const payload = event.payload as { text?: string }
-      if (payload.text) {
-        router.push('/')
-        app.setClipboardText(payload.text)
-      }
-    })
-  } catch (error) {
-    console.error('Failed to setup clipboard listener:', error)
-  }
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeydown)
-  unlisten?.()
 })
 </script>
 

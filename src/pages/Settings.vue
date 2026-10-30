@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import { Download, Upload } from '@lucide/vue'
-import { RButton, RFormRow, RInput, RInputNumber, RSwitch } from '@ruinb0w/ui'
+import { RButton, RFormRow, RInput, RInputNumber } from '@ruinb0w/ui'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { getPlatform } from '@/utils/tauri'
 import { isTauri } from '@/libs/env'
+import { getBase, setBase } from '@/utils/store'
 import type { Settings } from '@/types'
 
 const settings = useSettingsStore()
 
-const platform = ref<'desktop' | 'mobile'>('desktop')
-const isApp = isTauri()
-const serverBase = ref(localStorage.getItem('apiBase') ?? '')
+const isApp = isTauri()          // 现在只有移动端 Tauri
+const isMobile = isApp
+const serverBase = ref(getBase())
 const fileInput = ref<HTMLInputElement | null>(null)
 const isTesting = ref(false)
 const isSaving = ref(false)
@@ -25,10 +25,6 @@ const form = reactive<Settings>({
   model: settings.model,
   temperature: settings.temperature,
   historyLimit: settings.historyLimit,
-  clipboardTranslationEnabled: settings.clipboardTranslationEnabled,
-  clipboardTranslationInterval: settings.clipboardTranslationInterval,
-  autoStart: settings.autoStart,
-  silentStart: settings.silentStart,
 })
 
 // 设置从库里回来（或导入后）时把表单拉回一致
@@ -39,10 +35,6 @@ watch(
     settings.model,
     settings.temperature,
     settings.historyLimit,
-    settings.clipboardTranslationEnabled,
-    settings.clipboardTranslationInterval,
-    settings.autoStart,
-    settings.silentStart,
   ],
   () => {
     form.apiBaseUrl = settings.apiBaseUrl
@@ -50,39 +42,12 @@ watch(
     form.model = settings.model
     form.temperature = settings.temperature
     form.historyLimit = settings.historyLimit
-    form.clipboardTranslationEnabled = settings.clipboardTranslationEnabled
-    form.clipboardTranslationInterval = settings.clipboardTranslationInterval
-    form.autoStart = settings.autoStart
-    form.silentStart = settings.silentStart
   }
 )
 
 onMounted(() => {
   settings.loadSettings()
-  getPlatform().then(value => (platform.value = value))
 })
-
-async function toggleClipboard(enabled: boolean) {
-  form.clipboardTranslationEnabled = enabled
-  await settings.updateClipboardMonitorSettings(enabled, form.clipboardTranslationInterval)
-}
-
-async function changeClipboardInterval(interval: number) {
-  form.clipboardTranslationInterval = interval
-  if (form.clipboardTranslationEnabled) {
-    await settings.updateClipboardMonitorSettings(true, interval)
-  }
-}
-
-async function toggleAutoStart(enabled: boolean) {
-  form.autoStart = enabled
-  await settings.toggleAutoStart(enabled)
-}
-
-async function toggleSilentStart(enabled: boolean) {
-  form.silentStart = enabled
-  await settings.toggleSilentStart(enabled)
-}
 
 async function save() {
   isSaving.value = true
@@ -104,15 +69,8 @@ async function exportAll() {
 }
 
 async function importAll() {
-  // 网页端用隐藏的 file input，Tauri 里仍走原生对话框
-  if (!isApp) {
-    fileInput.value?.click()
-    return
-  }
-
-  isImporting.value = true
-  await settings.importAllData()
-  isImporting.value = false
+  // 导入统一走隐藏的 file input（Android WebView 的文件选择器可用）
+  fileInput.value?.click()
 }
 
 async function onFilePicked(event: Event) {
@@ -135,10 +93,9 @@ async function migrateLegacy() {
 }
 
 function saveServer() {
-  const value = serverBase.value.trim().replace(/\/$/, '')
-  if (value) localStorage.setItem('apiBase', value)
-  else localStorage.removeItem('apiBase')
-  location.reload()
+  setBase(serverBase.value)
+  serverBase.value = getBase()
+  settings.serverChanged()
 }
 </script>
 
@@ -186,54 +143,6 @@ function saveServer() {
     </div>
 
     <div v-if="isApp" class="settings-section">
-      <h3 class="section-title">剪切板翻译</h3>
-      <p class="section-desc">在任意应用中双击 Ctrl+C 触发翻译</p>
-
-      <RFormRow label="启用">
-        <RSwitch :model-value="form.clipboardTranslationEnabled" @update:model-value="toggleClipboard" />
-      </RFormRow>
-
-      <RFormRow
-        label="触发间隔"
-        :class="{ disabled: !form.clipboardTranslationEnabled }"
-      >
-        <div class="range-row">
-          <input
-            type="range"
-            class="range-input"
-            min="200"
-            max="3000"
-            step="100"
-            :value="form.clipboardTranslationInterval"
-            :disabled="!form.clipboardTranslationEnabled"
-            @input="changeClipboardInterval(Number(($event.target as HTMLInputElement).value))"
-          />
-          <span class="range-value">{{ (form.clipboardTranslationInterval / 1000).toFixed(1) }}s</span>
-        </div>
-      </RFormRow>
-    </div>
-
-    <div v-if="isApp && platform === 'desktop'" class="settings-section">
-      <h3 class="section-title">系统设置</h3>
-
-      <RFormRow label="开机自启" hint="系统启动时自动运行应用">
-        <RSwitch :model-value="form.autoStart" @update:model-value="toggleAutoStart" />
-      </RFormRow>
-
-      <RFormRow
-        label="静默启动"
-        hint="开机启动时不显示主窗口，仅在托盘运行"
-        :class="{ disabled: !form.autoStart }"
-      >
-        <RSwitch
-          :model-value="form.silentStart"
-          :disabled="!form.autoStart"
-          @update:model-value="toggleSilentStart"
-        />
-      </RFormRow>
-    </div>
-
-    <div v-if="isApp" class="settings-section">
       <h3 class="section-title">服务器</h3>
       <p class="section-desc">数据与 API Key 都在服务端；桌面端默认 127.0.0.1:8471，手机填局域网或 tailscale 地址</p>
 
@@ -257,7 +166,7 @@ function saveServer() {
           <p>导出或导入所有数据（包括设置、收藏和历史）</p>
         </div>
         <div class="data-management-actions">
-          <RButton v-if="platform !== 'mobile'" size="small" :loading="isExporting" @click="exportAll">
+          <RButton v-if="!isMobile" size="small" :loading="isExporting" @click="exportAll">
             <template #icon><Download :size="14" :stroke-width="1.5" /></template>
             导出
           </RButton>

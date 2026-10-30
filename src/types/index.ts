@@ -64,10 +64,6 @@ export type Settings = {
   model: string;
   temperature: number;
   historyLimit: number;
-  clipboardTranslationEnabled: boolean;
-  clipboardTranslationInterval: number;
-  autoStart: boolean;
-  silentStart: boolean;
 };
 
 export const defaultSettings: Settings = {
@@ -76,10 +72,6 @@ export const defaultSettings: Settings = {
   model: 'gpt-3.5-turbo',
   temperature: 0.7,
   historyLimit: 100,
-  clipboardTranslationEnabled: false,
-  clipboardTranslationInterval: 1000,
-  autoStart: false,
-  silentStart: false,
 };
 
 // ==================== Toast 类型 ====================
@@ -112,7 +104,7 @@ export type WordEntry = {
 
 // ==================== 应用状态类型 ====================
 
-export type PageType = 'search' | 'favorites' | 'history' | 'review' | 'settings' | 'grammar';
+export type PageType = 'search' | 'favorites' | 'history' | 'review' | 'settings' | 'grammar' | 'offline';
 
 // ==================== 语法检查结果类型 ====================
 
